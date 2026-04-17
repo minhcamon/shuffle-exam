@@ -1,0 +1,71 @@
+# render.yaml — Infrastructure as Code cho Render.com
+# Tài liệu: https://render.com/docs/render-yaml-spec
+#
+# Cách dùng:
+#   1. Đặt file này vào ROOT của repo backend/
+#   2. Trong Render Dashboard → "New" → "Import from render.yaml"
+#   3. Render sẽ tự đọc file này và cấu hình toàn bộ service
+
+services:
+  - type: web
+    name: quiz-shuffler-api
+    runtime: native             # Render dùng OS native (Ubuntu), không dùng Docker
+
+    # ── Cấu hình Build ──────────────────────────────────────
+    buildCommand: bash build.sh  # Gọi file build.sh ở trên
+
+    # ── Start Command: PHP built-in server trỏ vào public/ ──
+    # Đây là cách đơn giản nhất cho Render Free tier.
+    # Không cần Nginx / Apache. Render gán PORT tự động qua env $PORT.
+    startCommand: php -S 0.0.0.0:$PORT -t public public/index.php
+
+    # ── Health Check ────────────────────────────────────────
+    healthCheckPath: /api/health
+
+    # ── Biến môi trường ──────────────────────────────────────
+    envVars:
+      - key: APP_NAME
+        value: QuizShufflerAPI
+
+      - key: APP_ENV
+        value: production
+
+      - key: APP_DEBUG
+        value: "false"
+
+      - key: APP_KEY
+        generateValue: true     # Render tự sinh key ngẫu nhiên
+
+      - key: APP_URL
+        value: https://quiz-shuffler-api.onrender.com  # Thay bằng URL thực của bạn
+
+      - key: LOG_CHANNEL
+        value: stderr           # Log ra stdout/stderr để xem trong Render dashboard
+
+      - key: LOG_LEVEL
+        value: error
+
+      # CORS: cho phép domain Vercel gọi API
+      - key: FRONTEND_URL
+        value: https://your-app.vercel.app  # ← Thay bằng URL Vercel của bạn
+
+      # Tắt tất cả database (app chạy stateless, không cần DB)
+      - key: DB_CONNECTION
+        value: sqlite
+      - key: DB_DATABASE
+        value: ":memory:"
+
+      # Session không dùng (API stateless)
+      - key: SESSION_DRIVER
+        value: array
+
+      # Cache dùng array (không cần Redis)
+      - key: CACHE_STORE
+        value: array
+
+      # Queue đơn giản nhất (không chạy worker riêng)
+      - key: QUEUE_CONNECTION
+        value: sync
+
+    # ── Auto Deploy khi push lên main branch ────────────────
+    autoDeploy: true

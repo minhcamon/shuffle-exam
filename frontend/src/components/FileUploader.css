@@ -1,0 +1,103 @@
+/* FileUploader.css */
+
+.file-uploader-wrapper { width: 100%; }
+
+.drop-zone {
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 3rem 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: var(--transition);
+  background: var(--color-surface-alt);
+  position: relative;
+  overflow: hidden;
+}
+
+.drop-zone::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.drop-zone:hover:not(.disabled),
+.drop-zone.dragging {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.15);
+}
+
+.drop-zone.dragging::before { opacity: 0.05; }
+
+.drop-zone.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.drop-zone__icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  display: block;
+}
+
+/* With file selected */
+.drop-zone__file-info { position: relative; }
+
+.file-name {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-text);
+  word-break: break-all;
+  margin-bottom: 0.25rem;
+}
+
+.file-size {
+  font-size: 0.85rem;
+  color: var(--color-accent);
+  margin-bottom: 0.5rem;
+}
+
+.file-hint {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+/* Placeholder */
+.drop-zone__placeholder { position: relative; }
+
+.drop-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 0.25rem;
+}
+
+.drop-subtitle {
+  font-size: 0.95rem;
+  color: var(--color-text-muted);
+  margin-bottom: 0.75rem;
+}
+
+.link-text {
+  color: var(--color-primary);
+  text-decoration: underline;
+  font-weight: 500;
+}
+
+.drop-hint {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* Error message */
+.upload-error {
+  margin-top: 0.75rem;
+  color: var(--color-error);
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
