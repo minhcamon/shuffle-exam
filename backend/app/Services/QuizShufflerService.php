@@ -299,15 +299,42 @@ class QuizShufflerService
      *
      * @throws RuntimeException nếu không ghi được
      */
+    // private function saveToTemp(PhpWord $phpWord): string
+    // {
+    //     $tempPath = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'quiz_' . uniqid('', true) . '.docx';
+
+    //     $writer = IOFactory::createWriter($phpWord, 'Word2007');
+    //     $writer->save($tempPath);
+
+    //     if (!file_exists($tempPath)) {
+    //         throw new RuntimeException('Không thể tạo file output.');
+    //     }
+
+    //     return $tempPath;
+    // }
+
     private function saveToTemp(PhpWord $phpWord): string
     {
-        $tempPath = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'quiz_' . uniqid('', true) . '.docx';
+        // 1. TẠO NHÀ CHO PHPWORD: Lấy thư mục storage của Laravel
+        $laravelStorageTemp = storage_path('app/temp_uploads');
+        
+        // Nếu thư mục chưa có thì tự động tạo
+        if (!is_dir($laravelStorageTemp)) {
+            mkdir($laravelStorageTemp, 0777, true);
+        }
 
+        // 2. ÉP BUỘC PHPWORD: Chỉ được dùng thư mục này để nén/giải nén file nháp
+        \PhpOffice\PhpWord\Settings::setTempDir($laravelStorageTemp);
+
+        // 3. ĐẶT ĐƯỜNG DẪN ĐẦU RA: File docx mới cũng sẽ nằm gọn trong nhà của Laravel
+        $tempPath = $laravelStorageTemp . DIRECTORY_SEPARATOR . 'quiz_' . uniqid('', true) . '.docx';
+
+        // 4. Bắt đầu ghi file
         $writer = IOFactory::createWriter($phpWord, 'Word2007');
         $writer->save($tempPath);
 
         if (!file_exists($tempPath)) {
-            throw new RuntimeException('Không thể tạo file output.');
+            throw new RuntimeException('Không thể tạo file output tại: ' . $tempPath);
         }
 
         return $tempPath;

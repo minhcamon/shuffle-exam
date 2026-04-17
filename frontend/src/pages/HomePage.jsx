@@ -5,12 +5,12 @@ import { shuffleQuiz } from '../api/quizApi.js'
 import './HomePage.css'
 
 function HomePage() {
-  const navigate    = useNavigate()
-  const [file, setFile]             = useState(null)
-  const [copies, setCopies]         = useState(4)
-  const [isLoading, setIsLoading]   = useState(false)
-  const [progress, setProgress]     = useState(0)
-  const [apiError, setApiError]     = useState(null)
+  const navigate = useNavigate()
+  const [file, setFile] = useState(null)
+  const [copies, setCopies] = useState(4)
+  const [isLoading, setIsLoading] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [apiError, setApiError] = useState(null)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -24,16 +24,26 @@ function HomePage() {
       const blob = await shuffleQuiz(file, copies, setProgress)
 
       // Tạo link tải về
-      const url      = URL.createObjectURL(blob)
+      const url = URL.createObjectURL(blob)
       const fileName = `de-thi-tron-${copies}-ma_${Date.now()}.docx`
 
       // Chuyển sang trang Result với dữ liệu download
       navigate('/result', { state: { downloadUrl: url, fileName, copies } })
     } catch (err) {
-      const msg =
-        err.response?.data?.message ??
-        'Không thể kết nối đến máy chủ. Vui lòng thử lại.'
-      setApiError(msg)
+      if (err.response?.data instanceof Blob) {
+        const errorText = await err.response.data.text();
+        try {
+          const errorJson = JSON.parse(errorText);
+          console.error("🔥 LỖI TỪ LARAVEL:", errorJson);
+          setApiError(errorJson.message || "Lỗi xử lý file.");
+        } catch (parseError) {
+          // Nếu parse JSON thất bại (nghĩa là Laravel vẫn cứng đầu trả HTML)
+          console.error("🔥 LỖI CHƯA BIẾT (HTML/Text):", errorText);
+          setApiError("Lỗi hệ thống từ Backend. Vui lòng kiểm tra log.");
+        }
+      } else {
+        setApiError('Không thể kết nối đến máy chủ.');
+      }
     } finally {
       setIsLoading(false)
     }
