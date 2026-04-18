@@ -26,7 +26,8 @@ class QuizController extends Controller
 {
     public function __construct(
         private readonly QuizShufflerService $shufflerService
-    ) {}
+    ) {
+    }
 
     // ──────────────────────────────────────────────────────────────────────
     // POST /api/quiz/shuffle
@@ -41,7 +42,7 @@ class QuizController extends Controller
     //         // 1. CHIẾN THUẬT MỚI: Cất vào kho và ÉP BẮT BUỘC PHẢI CÓ ĐUÔI .DOCX
     //         $tempFileName = 'upload_' . uniqid() . '.docx';
     //         $savedPath = $uploadedFile->storeAs('temp_uploads', $tempFileName); 
-            
+
     //         // 2. Trích xuất đường dẫn tuyệt đối (Lúc này nó sẽ là: .../temp_uploads/upload_12345.docx)
     //         $absolutePath = Storage::path($savedPath); 
 
@@ -79,10 +80,10 @@ class QuizController extends Controller
     public function shuffle(ShuffleQuizRequest $request): BinaryFileResponse|JsonResponse
     {
         Log::info('========== BẮT ĐẦU REQUEST TRỘN ĐỀ ==========');
-        
+
         try {
             $uploadedFile = $request->file('file');
-            $copies       = (int) $request->input('copies', 4);
+            $copies = (int) $request->input('copies', 4);
 
             // 1. Log thông tin file gốc ngay khi nhận được từ React
             Log::info('[1] THÔNG TIN FILE GỐC TỪ FRONTEND:', [
@@ -95,10 +96,10 @@ class QuizController extends Controller
             // 2. LƯU FILE BẰNG HÀM MOVE() GỐC (Bỏ qua Storage ảo của Laravel)
             $destinationPath = storage_path('app/temp_uploads'); // Đường dẫn thư mục vật lý
             $tempFileName = 'upload_' . time() . '_' . uniqid() . '.docx';
-            
+
             // Lệnh này di chuyển thẳng file vào thư mục đích
-            $uploadedFile->move($destinationPath, $tempFileName); 
-            
+            $uploadedFile->move($destinationPath, $tempFileName);
+
             // Đường dẫn tuyệt đối giờ đây rất rõ ràng
             $absolutePath = $destinationPath . DIRECTORY_SEPARATOR . $tempFileName;
 
@@ -121,12 +122,18 @@ class QuizController extends Controller
 
             Log::info('[4] CHUẨN BỊ GIAO CHO PHPWORD ĐỌC...');
 
-            // 4. Giao cho Service xử lý
+            // Lấy mã đề: Chấp nhận cả mảng hoặc chuỗi phân tách bằng dấu phẩy
+            $codesInput = $request->input('codes', []);
+            $customCodes = is_array($codesInput)
+                ? array_map('trim', $codesInput)
+                : array_map('trim', explode(',', (string) $codesInput));
+
+            // Gọi Service
             $outputPath = $this->shufflerService->shuffle(
-                filePath:         $absolutePath,
-                copies:           $copies,
-                codes:            (array) $request->input('codes', []),
-                originalFileName: $uploadedFile->getClientOriginalName(),
+                filePath: $absolutePath,
+                copies: (int) $request->input('copies', 4),
+                customCodes: $customCodes,
+                originalFileName: $uploadedFile->getClientOriginalName()
             );
 
             Log::info('[5] PHPWORD ĐÃ TRỘN XONG! Đường dẫn file kết quả: ' . $outputPath);
@@ -140,12 +147,12 @@ class QuizController extends Controller
             $fileName = $baseName . '_' . $copies . '_ma_de.zip';
 
             return response()->download(
-                file:    $outputPath,
-                name:    $fileName,
+                file: $outputPath,
+                name: $fileName,
                 headers: [
-                    'Content-Type'        => 'application/zip', // Sửa content type thành zip
+                    'Content-Type' => 'application/zip', // Sửa content type thành zip
                     'Content-Disposition' => "attachment; filename=\"{$fileName}\"",
-                    'Cache-Control'       => 'no-store',
+                    'Cache-Control' => 'no-store',
                 ],
             )->deleteFileAfterSend(true);
 
@@ -154,10 +161,10 @@ class QuizController extends Controller
             Log::error('========== LỖI CRASH HỆ THỐNG ==========');
             Log::error('Thông báo lỗi: ' . $e->getMessage());
             Log::error('Dòng gây lỗi: ' . $e->getFile() . ' (Line ' . $e->getLine() . ')');
-            
+
             return response()->json([
                 'message' => 'Không thể xử lý file. Hãy đảm bảo file đúng định dạng .docx.',
-                'error'   => config('app.debug') ? $e->getMessage() : null,
+                'error' => config('app.debug') ? $e->getMessage() : null,
             ], \Illuminate\Http\Response::HTTP_UNPROCESSABLE_ENTITY); // Thay bằng 422
         }
     }
@@ -177,7 +184,7 @@ class QuizController extends Controller
             );
 
             return response()->json([
-                'total'     => count($questions),
+                'total' => count($questions),
                 'questions' => $questions,
             ]);
 
@@ -185,7 +192,7 @@ class QuizController extends Controller
             report($e);
             return response()->json([
                 'message' => 'Không thể đọc file.',
-                'error'   => config('app.debug') ? $e->getMessage() : null,
+                'error' => config('app.debug') ? $e->getMessage() : null,
             ], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
     }
