@@ -1,5 +1,5 @@
-# Dùng bản PHP 8.2 có sẵn Apache
-FROM php:8.2-apache
+# Dùng bản PHP 8.4 có sẵn Apache
+FROM php:8.4-apache
 
 # Cài đặt các thư viện hệ điều hành cần thiết cho Laravel và ZipArchive
 RUN apt-get update && apt-get install -y \
