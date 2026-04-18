@@ -16,8 +16,16 @@ ENV APACHE_DOCUMENT_ROOT /var/www/html/public
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
 RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
 
+# ==========================================
+# VÁ LỖI TẠI ĐÂY: Di chuyển vào đúng thư mục
+# ==========================================
+WORKDIR /var/www/html
+
 # Copy toàn bộ code vào trong server ảo
 COPY . /var/www/html
+
+# Cho phép Composer chạy dưới quyền quản trị (Root) trong Docker
+ENV COMPOSER_ALLOW_SUPERUSER=1
 
 # Cài đặt Composer và chạy lệnh install
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
