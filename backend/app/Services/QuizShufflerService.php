@@ -12,7 +12,34 @@ use Illuminate\Support\Facades\Log;
 class QuizShufflerService
 {
     // Biến lưu trữ đáp án đa tầng: [Mã đề][Phần][Câu] = Đáp án
+    // Biến lưu trữ đáp án đa tầng: [Mã đề][Phần][Câu] = Đáp án
     private array $answerMap = []; 
+    // Biến lưu trữ các Style gạch chân ẩn của LibreOffice/Word
+    private array $underlinedStyles = [];
+
+    private function loadUnderlinedStyles(string $workspace): void {
+        $this->underlinedStyles = [];
+        $stylesPath = $workspace . '/word/styles.xml';
+        if (!file_exists($stylesPath)) return;
+
+        $dom = new DOMDocument();
+        libxml_use_internal_errors(true);
+        $dom->load($stylesPath);
+        libxml_clear_errors();
+        
+        $xpath = new DOMXPath($dom);
+        $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
+
+        // Tìm tất cả các Style có chứa thuộc tính gạch chân
+        $styles = $xpath->query('//w:style[.//w:u[not(@w:val="none")]]');
+        foreach ($styles as $style) {
+            $styleId = $style->getAttribute('w:styleId');
+            if ($styleId) {
+                $this->underlinedStyles[] = $styleId;
+            }
+        }
+    } 
+    
 
     // ================================================================
     // NHẠC TRƯỞNG: PUBLIC ENTRY POINT
@@ -26,6 +53,9 @@ class QuizShufflerService
 
         $baseName = pathinfo($originalFileName, PATHINFO_FILENAME);
         [$workspace, $xmlBackupPath, $outputZipPath, $finalZip] = $this->prepareWorkspace($filePath);
+
+        // GỌI HÀM NÀY ĐỂ QUÉT STYLE ẨN:
+        $this->loadUnderlinedStyles($workspace);
 
         for ($i = 0; $i < $copies; $i++) {
             $maDe = !empty($customCodes[$i]) ? (string) $customCodes[$i] : str_pad(rand(100, 999), 3, '0', STR_PAD_LEFT);
@@ -72,26 +102,18 @@ class QuizShufflerService
         $xpath = new DOMXPath($dom);
         $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
         
-        // Quét 1: Thẻ Underline tiêu chuẩn
-        $underlines = $xpath->query('.//w:u[not(@w:val="none")]', $node);
-        if ($underlines->length > 0) return true;
+        if ($xpath->query('.//w:u[not(@w:val="none")]', $node)->length > 0) return true;
+        if ($xpath->query('.//w:pBdr/w:bottom[not(@w:val="none")] | .//w:bdr[not(@w:val="none")]', $node)->length > 0) return true;
+        if ($xpath->query('.//w:highlight[not(@w:val="none")]', $node)->length > 0) return true;
 
-        // Quét 2: Viền dưới (Border Bottom - Rất hay bị nhầm là underline)
-        $borders = $xpath->query('.//w:pBdr/w:bottom[not(@w:val="none")] | .//w:bdr[not(@w:val="none")]', $node);
-        if ($borders->length > 0) return true;
-
-        // Quét 3: Highlight màu (Nhiều GV dùng highlight thay vì gạch chân)
-        $highlights = $xpath->query('.//w:highlight[not(@w:val="none")]', $node);
-        if ($highlights->length > 0) return true;
-
-        // Quét 4: Style Character có chứa chữ Underline (Trường hợp copy từ web)
+        // Quét Style ẩn (Xử lý trường hợp T28 của LibreOffice)
         $styles = $xpath->query('.//w:rStyle', $node);
         foreach ($styles as $style) {
-            if (stripos($style->getAttribute('w:val'), 'underline') !== false) {
+            $val = $style->getAttribute('w:val');
+            if (in_array($val, $this->underlinedStyles) || stripos($val, 'underline') !== false) {
                 return true;
             }
         }
-        
         return false;
     }
 
@@ -101,26 +123,22 @@ class QuizShufflerService
         $xpath = new DOMXPath($node->ownerDocument);
         $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
         
-        // Tìm tất cả các thẻ tạo ra dòng gạch/màu nhấn/viền
         $query = './/w:u | .//w:pBdr/w:bottom | .//w:bdr | .//w:highlight';
         $elements = $xpath->query($query, $node);
         
         $remove = [];
         foreach ($elements as $el) { $remove[] = $el; }
         
-        // Dọn dẹp cả Style ẩn
         $styles = $xpath->query('.//w:rStyle', $node);
         foreach ($styles as $style) {
-            if (stripos($style->getAttribute('w:val'), 'underline') !== false) {
+            $val = $style->getAttribute('w:val');
+            if (in_array($val, $this->underlinedStyles) || stripos($val, 'underline') !== false) {
                 $remove[] = $style;
             }
         }
         
-        // Tiến hành xóa
         foreach ($remove as $el) { 
-            if ($el->parentNode) {
-                $el->parentNode->removeChild($el); 
-            }
+            if ($el->parentNode) $el->parentNode->removeChild($el); 
         }
     }
 
@@ -233,38 +251,83 @@ class QuizShufflerService
                 }
 
                 if ($node->nodeName === 'w:tbl') {
-                    $answerCells = [];
                     $tcs = $xpath->query('.//w:tc', $node);
-                    $foundAns = false;
+                    $boxAnswers = [];
+                    $layoutCells = [];
 
                     foreach ($tcs as $tc) {
                         $tcText = trim($tc->textContent);
-                        if (preg_match('/^([A-Da-d])\s*([\.\\)])/u', $tcText, $m)) {
-                            $ansKey = strtoupper($m[1]);
-                            $foundAns = true;
-                            $answerCells[$ansKey] = $tc;
-                            $sections[$currentSection]['questions'][$currentQuestion]['is_lower_case'] = ctype_lower($m[1]);
-
-                            // SOI GẠCH CHÂN TRONG BẢNG
-                            $isCorrect = $this->isNodeUnderlined($tc, $dom);
-                            if (str_contains($currentSection, 'Phần II')) {
-                                $sections[$currentSection]['questions'][$currentQuestion]['tf_answers'][$ansKey] = $isCorrect ? 'Đ' : 'S';
-                            } elseif ($isCorrect) {
-                                $sections[$currentSection]['questions'][$currentQuestion]['correct_key'] = $ansKey;
+                        
+                        // Quét tìm tất cả các đoạn văn <w:p> bên trong ô này
+                        $ps = $xpath->query('.//w:p', $tc);
+                        $ansInCell = [];
+                        foreach ($ps as $p) {
+                            if (preg_match('/^\s*([A-Da-d])\s*([\.\\)])/u', $p->textContent, $m)) {
+                                $ansInCell[strtoupper($m[1])] = [
+                                    'node' => $p,
+                                    'is_lower' => ctype_lower($m[1])
+                                ];
                             }
+                        }
+
+                        // TRƯỜNG HỢP CÂU 24: Nhồi 4 đáp án vào 1 ô -> Lưu vào BoxAnswers
+                        if (count($ansInCell) >= 2) {
+                            foreach ($ansInCell as $key => $ansData) {
+                                $boxAnswers[$key] = $ansData;
+                            }
+                        } 
+                        // TRƯỜNG HỢP CHUẨN: 1 ô 1 đáp án
+                        elseif (preg_match('/^([A-Da-d])\s*([\.\\)])/u', $tcText, $m)) {
+                            $layoutCells[strtoupper($m[1])] = [
+                                'node' => $tc,
+                                'is_lower' => ctype_lower($m[1])
+                            ];
                         }
                     }
 
-                    if ($foundAns) {
+                    // TỰ ĐỘNG ĐẬP HỘP: Biến bảng dị dạng thành các dòng bình thường
+                    if (count($boxAnswers) >= 2) {
+                        foreach ($boxAnswers as $key => $ansData) {
+                            $pNode = $ansData['node'];
+                            $sections[$currentSection]['questions'][$currentQuestion]['answers'][$key] = $pNode;
+                            $sections[$currentSection]['questions'][$currentQuestion]['is_lower_case'] = $ansData['is_lower'];
+
+                            $isCorrect = $this->isNodeUnderlined($pNode, $dom);
+                            if (str_contains($currentSection, 'Phần II')) {
+                                $sections[$currentSection]['questions'][$currentQuestion]['tf_answers'][$key] = $isCorrect ? 'Đ' : 'S';
+                            } elseif ($isCorrect) {
+                                $sections[$currentSection]['questions'][$currentQuestion]['correct_key'] = $key;
+                            }
+                        }
+                        $nodesToRemove[] = $node; // Phá hủy bảng gốc đi
+                    } 
+                    // XỬ LÝ BẢNG CHUẨN
+                    elseif (count($layoutCells) >= 2) {
+                        $answerCells = [];
+                        foreach ($layoutCells as $key => $ansData) {
+                            $tcNode = $ansData['node'];
+                            $answerCells[$key] = $tcNode;
+                            $sections[$currentSection]['questions'][$currentQuestion]['is_lower_case'] = $ansData['is_lower'];
+
+                            $isCorrect = $this->isNodeUnderlined($tcNode, $dom);
+                            if (str_contains($currentSection, 'Phần II')) {
+                                $sections[$currentSection]['questions'][$currentQuestion]['tf_answers'][$key] = $isCorrect ? 'Đ' : 'S';
+                            } elseif ($isCorrect) {
+                                $sections[$currentSection]['questions'][$currentQuestion]['correct_key'] = $key;
+                            }
+                        }
                         $sections[$currentSection]['questions'][$currentQuestion]['table_answers'] = [
                             'table_node' => $node,
                             'cells'      => $answerCells,
                         ];
+                        $nodesToRemove[] = $node;
                     } else {
+                        // Bảng nội dung của đề bài
                         $sections[$currentSection]['questions'][$currentQuestion]['question_nodes'][] = $node;
+                        $nodesToRemove[] = $node;
                     }
-                    $nodesToRemove[] = $node;
-                } 
+                    continue;
+                }
                 elseif (preg_match('/^\s*([A-Da-d])\s*([\.\\)])/u', $text, $m)) {
                     $ansKey = strtoupper($m[1]);
                     
