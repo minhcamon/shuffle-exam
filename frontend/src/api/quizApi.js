@@ -41,18 +41,23 @@ apiClient.interceptors.response.use(
 /**
  * Gửi file Word lên backend để trộn đề thi.
  *
- * @param {File}   file        - File .docx từ input[type=file]
- * @param {number} copies      - Số lượng mã đề cần tạo (mặc định 4)
- * @param {Function} onProgress - Callback nhận phần trăm upload (0–100)
- * @returns {Promise<Blob>}      - File .docx đã trộn dưới dạng Blob
+ * @param {File}       file        - File .docx từ input[type=file]
+ * @param {number}     copies      - Số lượng mã đề cần tạo (mặc định 4)
+ * @param {Function}   onProgress  - Callback nhận phần trăm upload (0–100)
+ * @param {string[]}   codes       - Mảng mã đề tùy chọn (VD: ['101','202','303','404'])
+ *                                   Nếu rỗng, backend tự sinh ngẫu nhiên.
+ * @returns {Promise<Blob>}         - File ZIP chứa các .docx đã trộn
  */
-export async function shuffleQuiz(file, copies = 4, onProgress = null) {
+export async function shuffleQuiz(file, copies = 4, onProgress = null, codes = []) {
   const formData = new FormData()
   formData.append('file', file)
   formData.append('copies', copies)
 
+  // Gửi từng mã đề riêng lẻ → Laravel nhận dưới dạng codes[] (array)
+  codes.forEach((code) => formData.append('codes[]', code.trim()))
+
   const response = await apiClient.post('/api/quiz/shuffle', formData, {
-    responseType: 'blob', // nhận về file binary
+    responseType: 'blob',
     headers: { 'Content-Type': 'multipart/form-data' },
     onUploadProgress: (progressEvent) => {
       if (onProgress && progressEvent.total) {

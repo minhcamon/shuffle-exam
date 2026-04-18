@@ -36,6 +36,14 @@ class ShuffleQuizRequest extends FormRequest
                 'min:2',
                 'max:26',                          // tối đa 26 mã đề (A–Z)
             ],
+            'codes' => [
+                'sometimes',
+                'array',
+            ],
+            'codes.*' => [
+                'string',
+                'max:10',
+            ],
         ];
     }
 

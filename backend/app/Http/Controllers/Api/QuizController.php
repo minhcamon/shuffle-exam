@@ -123,8 +123,10 @@ class QuizController extends Controller
 
             // 4. Giao cho Service xử lý
             $outputPath = $this->shufflerService->shuffle(
-                filePath: $absolutePath,
-                copies:   $copies,
+                filePath:         $absolutePath,
+                copies:           $copies,
+                codes:            (array) $request->input('codes', []),
+                originalFileName: $uploadedFile->getClientOriginalName(),
             );
 
             Log::info('[5] PHPWORD ĐÃ TRỘN XONG! Đường dẫn file kết quả: ' . $outputPath);
@@ -134,7 +136,8 @@ class QuizController extends Controller
                 unlink($absolutePath);
             }
 
-           $fileName = 'Bo_De_Thi_Tron_' . $copies . '_Ma_' . time() . '.zip'; // Sửa chữ .docx thành .zip
+            $baseName = pathinfo($uploadedFile->getClientOriginalName(), PATHINFO_FILENAME);
+            $fileName = $baseName . '_' . $copies . '_ma_de.zip';
 
             return response()->download(
                 file:    $outputPath,

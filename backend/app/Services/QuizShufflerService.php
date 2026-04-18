@@ -15,7 +15,7 @@ class QuizShufflerService
     // PUBLIC ENTRY POINT
     // ================================================================
 
-    public function shuffle(string $filePath, int $copies): string
+    public function shuffle(string $filePath, int $copies, array $codes = [], string $originalFileName = 'De_Thi'): string
     {
         Log::info("===== BẮT ĐẦU TẠO {$copies} MÃ ĐỀ ĐA CHIỀU =====");
 
@@ -23,11 +23,16 @@ class QuizShufflerService
         [$workspace, $xmlBackupPath, $outputZipPath, $finalZip] = $this->prepareWorkspace($filePath);
 
         $generatedFiles = [];
+        $baseName = pathinfo($originalFileName, PATHINFO_FILENAME); // Lấy tên file bỏ đuôi .docx
 
         // BƯỚC 2: Vòng lặp sinh N mã đề
-        for ($i = 1; $i <= $copies; $i++) {
-            $maDe = str_pad(rand(100, 999), 3, '0', STR_PAD_LEFT);
-            Log::info("--- Đang sinh Mã đề: {$maDe} (lần {$i}/{$copies}) ---");
+        for ($i = 0; $i < $copies; $i++) {
+            // Ưu tiên mã đề tùy chỉnh nếu có
+            $maDe = !empty($codes[$i]) 
+                ? (string) $codes[$i] 
+                : str_pad(rand(100, 999), 3, '0', STR_PAD_LEFT);
+
+            Log::info("--- Đang sinh Mã đề: {$maDe} (lần " . ($i + 1) . "/{$copies}) ---");
 
             // 2a. Reset XML về trạng thái gốc
             $xmlOriginalPath = $workspace . '/word/document.xml';
@@ -41,7 +46,11 @@ class QuizShufflerService
 
             // 2d. Lưu XML và đóng gói thành .docx rồi nạp vào ZIP tổng
             $tempDocx = $this->packExamCopy($dom, $xmlOriginalPath, $workspace, $maDe);
-            $finalZip->addFile($tempDocx, "De_Thi_Ma_{$maDe}.docx");
+            
+            // Tên file trong zip: [Tên gốc]_[Mã đề].docx
+            $fileNameInZip = "{$baseName}_Ma_{$maDe}.docx";
+            $finalZip->addFile($tempDocx, $fileNameInZip);
+            
             $generatedFiles[] = $tempDocx;
         }
 

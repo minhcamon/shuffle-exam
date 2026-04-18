@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import FileUploader from '../components/FileUploader.jsx'
 import PreviewModal from '../components/PreviewModal.jsx'
@@ -10,36 +10,82 @@ function HomePage() {
   const navigate = useNavigate()
   const [file, setFile] = useState(null)
   const [copies, setCopies] = useState(4)
+  const [codes, setCodes] = useState(['', '', '', '']) // khởi tạo theo copies mặc định
+  const [useCustomCodes, setUseCustomCodes] = useState(false)
+  const [codesError, setCodesError] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
   const [progress, setProgress] = useState(0)
   const [apiError, setApiError] = useState(null)
   const [showPreview, setShowPreview] = useState(false)
-  const [wakeUpStartTime, setWakeUpStartTime] = useState(null) // null = ẩn banner
+  const [wakeUpStartTime, setWakeUpStartTime] = useState(null)
   const wakeUpTimerRef = useRef(null)
+
+  // Sync độ dài mảng codes theo copies (thêm ô trống / bớt ô thừa)
+  useEffect(() => {
+    setCodes((prev) => {
+      if (prev.length === copies) return prev
+      if (prev.length < copies) return [...prev, ...Array(copies - prev.length).fill('')]
+      return prev.slice(0, copies)
+    })
+    setCodesError(null)
+  }, [copies])
 
   const handleFileSelect = (selectedFile) => {
     setFile(selectedFile)
-    setShowPreview(false) // reset khi đổi file
+    setShowPreview(false)
+  }
+
+  const handleCodeChange = useCallback((index, value) => {
+    setCodes((prev) => {
+      const next = [...prev]
+      next[index] = value
+      return next
+    })
+    setCodesError(null)
+  }, [])
+
+  // Validate codes: phải đủ số lượng, không trùng, không rỗng
+  const validateCodes = () => {
+    if (!useCustomCodes) return true
+
+    const trimmed = codes.map((c) => c.trim())
+    const empty = trimmed.filter((c) => c === '')
+
+    if (empty.length > 0) {
+      setCodesError(`Còn ${empty.length} ô mã đề chưa được điền.`)
+      return false
+    }
+
+    const unique = new Set(trimmed)
+    if (unique.size !== trimmed.length) {
+      setCodesError('Các mã đề không được trùng nhau.')
+      return false
+    }
+
+    setCodesError(null)
+    return true
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!file) return
+    if (!validateCodes()) return
 
     setIsLoading(true)
     setApiError(null)
     setProgress(0)
     setWakeUpStartTime(null)
 
-    // Sau 5 giây chưa có phản hồi → hiện banner "server đang thức dậy"
     wakeUpTimerRef.current = setTimeout(() => {
       setWakeUpStartTime(Date.now())
-    }, 500)
+    }, 5000)
 
     try {
-      const blob = await shuffleQuiz(file, copies, setProgress)
+      const activeCodes = useCustomCodes ? codes.map((c) => c.trim()) : []
+      const blob = await shuffleQuiz(file, copies, setProgress, activeCodes)
       const url = URL.createObjectURL(blob)
-      const fileName = `de-thi-tron-${copies}-ma_${Date.now()}.zip`
+      const baseName = file.name.replace(/\.docx$/i, '')
+      const fileName = `${baseName}_${copies}-ma-de.zip`
       navigate('/result', { state: { downloadUrl: url, fileName, copies } })
     } catch (err) {
       if (err.response?.data instanceof Blob) {
@@ -56,7 +102,6 @@ function HomePage() {
         setApiError('Không thể kết nối đến máy chủ.')
       }
     } finally {
-      // Dù thành công hay lỗi, đều reset wake-up banner
       clearTimeout(wakeUpTimerRef.current)
       setWakeUpStartTime(null)
       setIsLoading(false)
@@ -66,7 +111,6 @@ function HomePage() {
   return (
     <>
       <div className="home-page">
-        {/* ── Centered content wrapper ── */}
         <div className="home-center">
 
           {/* Hero */}
@@ -86,7 +130,8 @@ function HomePage() {
           <main>
             <section className="card upload-card fade-in-up" style={{ animationDelay: '0.1s' }}>
               <form onSubmit={handleSubmit} noValidate>
-                {/* Step 1 */}
+
+                {/* ── Step 1: Chọn file ── */}
                 <div className="form-section">
                   <label className="form-label">
                     <span className="step-badge">1</span>
@@ -94,7 +139,6 @@ function HomePage() {
                   </label>
                   <FileUploader onFileSelect={handleFileSelect} disabled={isLoading} />
 
-                  {/* Nút Xem trước — chỉ hiện khi đã chọn file */}
                   {file && !isLoading && (
                     <button
                       id="preview-btn"
@@ -108,7 +152,7 @@ function HomePage() {
                   )}
                 </div>
 
-                {/* Step 2 */}
+                {/* ── Step 2: Số lượng mã đề ── */}
                 <div className="form-section">
                   <label className="form-label" htmlFor="copies-input">
                     <span className="step-badge">2</span>
@@ -121,7 +165,7 @@ function HomePage() {
                       min={2}
                       max={26}
                       value={copies}
-                      onChange={(e) => setCopies(Number(e.target.value))}
+                      onChange={(e) => setCopies(Math.min(26, Math.max(2, Number(e.target.value))))}
                       disabled={isLoading}
                       className="copies-input"
                     />
@@ -129,12 +173,78 @@ function HomePage() {
                   </div>
                 </div>
 
-                {/* Error */}
+                {/* ── Step 3: Mã đề tùy chọn ── */}
+                <div className="form-section">
+                  <div className="custom-codes-header">
+                    <label className="form-label" style={{ margin: 0 }}>
+                      <span className="step-badge">3</span>
+                      Mã đề tùy chỉnh
+                      <span
+                        className="step-tooltip"
+                        title="Nhập mã số riêng cho từng đề (VD: 101, 202…). Nếu bỏ qua, hệ thống tự sinh mã ngẫu nhiên."
+                      >
+                        ℹ️
+                      </span>
+                    </label>
+                    {/* Toggle bật/tắt */}
+                    <button
+                      type="button"
+                      className={`toggle-btn ${useCustomCodes ? 'toggle-btn--on' : ''}`}
+                      onClick={() => { setUseCustomCodes((v) => !v); setCodesError(null) }}
+                      disabled={isLoading}
+                      aria-pressed={useCustomCodes}
+                    >
+                      <span className="toggle-btn__track">
+                        <span className="toggle-btn__thumb" />
+                      </span>
+                      <span>{useCustomCodes ? 'Bật' : 'Tắt'}</span>
+                    </button>
+                  </div>
+
+                  {!useCustomCodes && (
+                    <p className="codes-off-hint">
+                      Hệ thống sẽ tự sinh mã ngẫu nhiên 3 chữ số cho mỗi đề.
+                    </p>
+                  )}
+
+                  {useCustomCodes && (
+                    <div className="codes-grid" style={{ '--cols': Math.min(copies, 4) }}>
+                      {codes.map((code, idx) => (
+                        <div key={idx} className="code-input-wrapper">
+                          <label className="code-input-label" htmlFor={`code-${idx}`}>
+                            Đề {idx + 1}
+                          </label>
+                          <input
+                            id={`code-${idx}`}
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={10}
+                            className={`code-input ${codesError && code.trim() === '' ? 'code-input--error' : ''}`}
+                            placeholder={`VD: ${101 + idx * 101}`}
+                            value={code}
+                            onChange={(e) => handleCodeChange(idx, e.target.value)}
+                            disabled={isLoading}
+                            autoComplete="off"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Lỗi mã đề */}
+                  {codesError && (
+                    <div className="codes-error" role="alert">
+                      ⚠️ {codesError}
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Error API ── */}
                 {apiError && (
                   <div className="api-error" role="alert">❌ {apiError}</div>
                 )}
 
-                {/* Progress upload (0–100%) */}
+                {/* ── Progress upload (0–100%) ── */}
                 {isLoading && progress < 100 && (
                   <div className="progress-wrapper" aria-live="polite">
                     <div className="progress-bar">
@@ -144,12 +254,12 @@ function HomePage() {
                   </div>
                 )}
 
-                {/* WakeUp Banner — hiện khi server sleep (sau 5s chưa phản hồi) */}
+                {/* ── WakeUp Banner ── */}
                 {isLoading && progress >= 100 && wakeUpStartTime && (
                   <WakeUpBanner startTime={wakeUpStartTime} />
                 )}
 
-                {/* Trạng thái xử lý thông thường (chưa đủ 5s) */}
+                {/* ── Đang xử lý thông thường ── */}
                 {isLoading && progress >= 100 && !wakeUpStartTime && (
                   <div className="progress-wrapper" aria-live="polite">
                     <div className="progress-bar">
@@ -159,8 +269,7 @@ function HomePage() {
                   </div>
                 )}
 
-
-                {/* Submit */}
+                {/* ── Submit ── */}
                 <button
                   id="shuffle-btn"
                   type="submit"
@@ -207,7 +316,7 @@ function HomePage() {
         </footer>
       </div>
 
-      {/* ── Preview Modal (portal-like, outside home-page div) ── */}
+      {/* Preview Modal */}
       {showPreview && (
         <PreviewModal
           file={file}
