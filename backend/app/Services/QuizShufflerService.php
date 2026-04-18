@@ -11,11 +11,61 @@ use Illuminate\Support\Facades\Log;
 
 class QuizShufflerService
 {
-    // Biến lưu trữ đáp án đa tầng: [Mã đề][Phần][Câu] = Đáp án
-    // Biến lưu trữ đáp án đa tầng: [Mã đề][Phần][Câu] = Đáp án
     private array $answerMap = []; 
-    // Biến lưu trữ các Style gạch chân ẩn của LibreOffice/Word
     private array $underlinedStyles = [];
+
+    // ================================================================
+    // NHẠC TRƯỞNG: PUBLIC ENTRY POINT
+    // ================================================================
+
+    public function shuffle(string $filePath, int $copies, array $customCodes = [], string $originalFileName = 'De_Thi'): string
+    {
+        Log::info("===== BẮT ĐẦU TẠO {$copies} MÃ ĐỀ (BẢN FINAL) =====");
+        $this->answerMap = [];
+        $generatedFiles = [];
+
+        $baseName = pathinfo($originalFileName, PATHINFO_FILENAME);
+        [$workspace, $xmlBackupPath, $outputZipPath, $finalZip] = $this->prepareWorkspace($filePath);
+        
+        $this->loadUnderlinedStyles($workspace);
+
+        for ($i = 0; $i < $copies; $i++) {
+            $maDe = !empty($customCodes[$i]) ? (string) $customCodes[$i] : str_pad(rand(100, 999), 3, '0', STR_PAD_LEFT);
+            $customCodes[$i] = $maDe; 
+
+            Log::info("--- Đang sinh Mã đề: {$maDe} ---");
+
+            $xmlOriginalPath = $workspace . '/word/document.xml';
+            copy($xmlBackupPath, $xmlOriginalPath);
+
+            // Bước 1: Đọc và bóc tách
+            [$dom, $body, $sections, $globalFooterNodes] = $this->parseDocumentSections($xmlOriginalPath);
+
+            // Bước 2: Thay mã đề (Bản nâng cấp Nuclear Replace)
+            $this->replaceCodeInDOM($dom, $maDe);
+            $this->updateExamCodeInHeadersAndFooters($workspace, $maDe);
+
+            // Bước 3: Tráo và Ráp (Sắp xếp chuẩn text phụ)
+            $this->shuffleAndRebuild($dom, $body, $sections, $globalFooterNodes, $maDe);
+
+            // Bước 4: Đóng gói
+            $tempDocx = $this->packExamCopy($dom, $xmlOriginalPath, $workspace, $maDe);
+            $finalZip->addFile($tempDocx, "De_Thi_Ma_{$maDe}.docx");
+            $generatedFiles[] = $tempDocx;
+        }
+
+        $csvPath = $this->generateAnswerKeyCSV($customCodes, $originalFileName);
+        $finalZip->addFile($csvPath, "DapAn_TongHop.csv");
+
+        $finalZip->close();
+        $this->cleanup($workspace, $xmlBackupPath, array_merge($generatedFiles, [$csvPath]));
+
+        return $outputZipPath;
+    }
+
+    // ================================================================
+    // TIỆN ÍCH: MẮT THẦN, CỤC TẨY VÀ THAY MÃ ĐỀ
+    // ================================================================
 
     private function loadUnderlinedStyles(string $workspace): void {
         $this->underlinedStyles = [];
@@ -30,71 +80,13 @@ class QuizShufflerService
         $xpath = new DOMXPath($dom);
         $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
 
-        // Tìm tất cả các Style có chứa thuộc tính gạch chân
         $styles = $xpath->query('//w:style[.//w:u[not(@w:val="none")]]');
         foreach ($styles as $style) {
-            $styleId = $style->getAttribute('w:styleId');
-            if ($styleId) {
+            if ($styleId = $style->getAttribute('w:styleId')) {
                 $this->underlinedStyles[] = $styleId;
             }
         }
-    } 
-    
-
-    // ================================================================
-    // NHẠC TRƯỞNG: PUBLIC ENTRY POINT
-    // ================================================================
-
-    public function shuffle(string $filePath, int $copies, array $customCodes = [], string $originalFileName = 'De_Thi'): string
-    {
-        Log::info("===== BẮT ĐẦU TẠO {$copies} MÃ ĐỀ (BẢN V3+ ULTIMATE) =====");
-        $this->answerMap = [];
-        $generatedFiles = [];
-
-        $baseName = pathinfo($originalFileName, PATHINFO_FILENAME);
-        [$workspace, $xmlBackupPath, $outputZipPath, $finalZip] = $this->prepareWorkspace($filePath);
-
-        // GỌI HÀM NÀY ĐỂ QUÉT STYLE ẨN:
-        $this->loadUnderlinedStyles($workspace);
-
-        for ($i = 0; $i < $copies; $i++) {
-            $maDe = !empty($customCodes[$i]) ? (string) $customCodes[$i] : str_pad(rand(100, 999), 3, '0', STR_PAD_LEFT);
-            $customCodes[$i] = $maDe; // Đảm bảo mảng mã đề được cập nhật để in CSV
-
-            Log::info("--- Đang sinh Mã đề: {$maDe} ---");
-
-            $xmlOriginalPath = $workspace . '/word/document.xml';
-            copy($xmlBackupPath, $xmlOriginalPath);
-
-            // Bước 1: Đọc và nhận diện (Parse)
-            [$dom, $body, $sections] = $this->parseDocumentSections($xmlOriginalPath);
-
-            // Bước 2: Thay mã đề
-            $this->updateExamCodeInDoc($dom, $maDe);
-            $this->updateExamCodeInHeadersAndFooters($workspace, $maDe);
-
-            // Bước 3: Tráo và Ráp (Rebuild)
-            $this->shuffleAndRebuild($dom, $body, $sections, $maDe);
-
-            // Bước 4: Đóng gói Word
-            $tempDocx = $this->packExamCopy($dom, $xmlOriginalPath, $workspace, $maDe);
-            $finalZip->addFile($tempDocx, $baseName . "_MaDe_" . $maDe . ".docx");
-            $generatedFiles[] = $tempDocx;
-        }
-
-        // Bước 5: Xuất Excel (CSV)
-        $csvPath = $this->generateAnswerKeyCSV($customCodes, $originalFileName);
-        $finalZip->addFile($csvPath, "DapAn_TongHop_" . $baseName . ".csv");
-
-        $finalZip->close();
-        $this->cleanup($workspace, $xmlBackupPath, array_merge($generatedFiles, [$csvPath]));
-
-        return $outputZipPath;
     }
-
-    // ================================================================
-    // TIỆN ÍCH 1: MẮT THẦN (SOII GẠCH CHÂN) VÀ CỤC TẨY
-    // ================================================================
 
     private function isNodeUnderlined($node, $dom): bool 
     {
@@ -106,7 +98,6 @@ class QuizShufflerService
         if ($xpath->query('.//w:pBdr/w:bottom[not(@w:val="none")] | .//w:bdr[not(@w:val="none")]', $node)->length > 0) return true;
         if ($xpath->query('.//w:highlight[not(@w:val="none")]', $node)->length > 0) return true;
 
-        // Quét Style ẩn (Xử lý trường hợp T28 của LibreOffice)
         $styles = $xpath->query('.//w:rStyle', $node);
         foreach ($styles as $style) {
             $val = $style->getAttribute('w:val');
@@ -142,17 +133,67 @@ class QuizShufflerService
         }
     }
 
-    // ================================================================
-    // TIỆN ÍCH 2: THAY MÃ ĐỀ (DOCUMENT & FOOTERS)
-    // ================================================================
-
-    private function updateExamCodeInDoc(DOMDocument $dom, string $newCode): void {
+   // [BẢN NÂNG CẤP MỚI NHẤT]: Mổ nội soi đổi mã đề - Không làm vỡ Layout (Tabs, Spaces)
+    private function replaceCodeInDOM(DOMDocument $dom, string $newCode): bool {
         $xpath = new DOMXPath($dom);
         $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
-        $nodes = $xpath->query("//w:t[contains(., 'Mã đề')]");
-        foreach ($nodes as $node) {
-            $node->nodeValue = preg_replace('/(Mã đề\s*[:\-])\s*.*/u', "$1 {$newCode}", $node->nodeValue);
+        $paragraphs = $xpath->query('//w:p');
+        $isModified = false;
+
+        foreach ($paragraphs as $p) {
+            $tNodes = $xpath->query('.//w:t', $p);
+            if ($tNodes->length === 0) continue;
+
+            // 1. Gom toàn bộ text trong dòng để kiểm tra
+            $fullText = '';
+            foreach ($tNodes as $t) {
+                $fullText .= $t->nodeValue;
+            }
+
+            // 2. Nếu phát hiện cụm "Mã đề: xxx"
+            if (preg_match('/(Mã\s*đề(?:\s*thi)?\s*[:\-]?\s*)[\p{L}\p{N}]+/iu', $fullText, $matches)) {
+                $targetStr = $matches[0]; // Ví dụ: "Mã đề: GỐC"
+                $replacement = $matches[1] . $newCode; // Ví dụ: "Mã đề: 180"
+                
+                $startOffset = mb_strpos($fullText, $targetStr, 0, 'UTF-8');
+                $charsToMatch = mb_strlen($targetStr, 'UTF-8');
+                
+                $currentOffset = 0;
+                $replaced = false;
+
+                // 3. Quét từng node chữ để thay thế từ từ
+                foreach ($tNodes as $t) {
+                    $tText = $t->nodeValue;
+                    $tLen = mb_strlen($tText, 'UTF-8');
+
+                    if (!$replaced) {
+                        // Nếu điểm bắt đầu của "Mã đề" rơi vào Node này
+                        if ($currentOffset + $tLen > $startOffset) {
+                            $localStart = $startOffset - $currentOffset;
+                            $localMatchLen = min($tLen - $localStart, $charsToMatch);
+
+                            $before = mb_substr($tText, 0, $localStart, 'UTF-8');
+                            $after = mb_substr($tText, $localStart + $localMatchLen, null, 'UTF-8');
+
+                            // Ghi cụm mới vào Node này
+                            $t->nodeValue = $before . $replacement . $after;
+                            $charsToMatch -= $localMatchLen;
+                            $replaced = true;
+                        }
+                    } elseif ($charsToMatch > 0) {
+                        // Xóa các mẩu chữ thừa của mã đề cũ ở các Node tiếp theo (nếu có)
+                        $localMatchLen = min($tLen, $charsToMatch);
+                        $after = mb_substr($tText, $localMatchLen, null, 'UTF-8');
+                        $t->nodeValue = $after;
+                        $charsToMatch -= $localMatchLen;
+                    }
+
+                    $currentOffset += $tLen;
+                }
+                $isModified = true;
+            }
         }
+        return $isModified;
     }
 
     private function updateExamCodeInHeadersAndFooters(string $workspace, string $newCode): void 
@@ -163,21 +204,15 @@ class QuizShufflerService
             libxml_use_internal_errors(true);
             $dom->load($file);
             libxml_clear_errors();
-            $xpath = new DOMXPath($dom);
-            $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
             
-            $nodes = $xpath->query("//w:t[contains(., 'Mã đề')]");
-            $isModified = false;
-            foreach ($nodes as $node) {
-                $node->nodeValue = preg_replace('/(Mã đề\s*[:\-])\s*.*/u', "$1 {$newCode}", $node->nodeValue);
-                $isModified = true;
+            if ($this->replaceCodeInDOM($dom, $newCode)) {
+                $dom->save($file);
             }
-            if ($isModified) $dom->save($file);
         }
     }
 
     // ================================================================
-    // BƯỚC 1: ĐỌC VÀ NHẬN DIỆN (PARSER V3 + SOII GẠCH CHÂN)
+    // BƯỚC 1: ĐỌC VÀ NHẬN DIỆN (PARSER)
     // ================================================================
 
     private function parseDocumentSections(string $xmlPath): array
@@ -195,6 +230,9 @@ class QuizShufflerService
         $currentSection = 'default';
         $currentQuestion = null;
         $nodesToRemove = [];
+        
+        $parsingFooter = false;
+        $globalFooterNodes = []; // Khoang chứa chân trang (HẾT)
 
         $nodes = [];
         foreach ($body->childNodes as $node) { $nodes[] = $node; }
@@ -202,11 +240,15 @@ class QuizShufflerService
         foreach ($nodes as $node) {
             $text = $node->textContent;
             
-            // Xóa khoảng trắng thừa giữa các phần
+            // Xóa dòng trống
             if (trim($text) === '') {
                 if ($node->nodeName === 'w:p') {
                     if ($currentQuestion !== null) {
-                        $sections[$currentSection]['questions'][$currentQuestion]['question_nodes'][] = $node;
+                        if (!$sections[$currentSection]['questions'][$currentQuestion]['has_seen_answers']) {
+                            $sections[$currentSection]['questions'][$currentQuestion]['question_nodes'][] = $node;
+                        } else {
+                            $sections[$currentSection]['questions'][$currentQuestion]['post_question_nodes'][] = $node;
+                        }
                         $nodesToRemove[] = $node;
                     } elseif ($currentSection !== 'default') {
                         $sections[$currentSection]['header_nodes'][] = $node;
@@ -216,6 +258,18 @@ class QuizShufflerService
                 continue;
             }
 
+            // Nhận diện chân trang (Document Footer)
+            if (preg_match('/^[\.\-\*_\s]*HẾT[\.\-\*_\s]*$/iu', trim($text)) || preg_match('/^\s*Ghi\s*chú\s*:/iu', trim($text))) {
+                $parsingFooter = true;
+            }
+
+            if ($parsingFooter) {
+                $globalFooterNodes[] = $node;
+                $nodesToRemove[] = $node;
+                continue;
+            }
+
+            // Nhận diện Phần
             if (preg_match('/^\s*Phần\s+([I,V,X,1-9]+)/i', $text, $matches)) {
                 $currentSection = trim($matches[0]);
                 $currentQuestion = null;
@@ -228,23 +282,25 @@ class QuizShufflerService
                 $sections[$currentSection] = ['header_nodes' => [], 'questions' => []];
             }
 
+            // Nhận diện Câu hỏi
             if (preg_match('/^\s*Câu\s+(\d+)\s*[\.\\:]/i', $text, $matches)) {
                 $currentQuestion = 'Câu ' . $matches[1];
                 $sections[$currentSection]['questions'][$currentQuestion] = [
-                    'question_nodes' => [$node],
-                    'answers'        => [],
-                    'table_answers'  => [],
-                    'tf_answers'     => [],
-                    'correct_key'    => null,
-                    'is_lower_case'  => false,
-                    'tf_key_nodes'   => [],
+                    'question_nodes'      => [$node],
+                    'post_question_nodes' => [], // Text nằm sau đáp án
+                    'has_seen_answers'    => false, // Cảm biến thứ tự text
+                    'answers'             => [],
+                    'table_answers'       => [],
+                    'tf_answers'          => [],
+                    'correct_key'         => null,
+                    'is_lower_case'       => false,
+                    'tf_key_nodes'        => [],
                 ];
                 $nodesToRemove[] = $node;
                 continue;
             }
 
             if ($currentQuestion !== null) {
-                // Tiêu diệt dòng Đáp án: A cũ
                 if (preg_match('/^\s*Đáp\s+án\s*:/iu', $text)) {
                     $nodesToRemove[] = $node;
                     continue;
@@ -257,36 +313,23 @@ class QuizShufflerService
 
                     foreach ($tcs as $tc) {
                         $tcText = trim($tc->textContent);
-                        
-                        // Quét tìm tất cả các đoạn văn <w:p> bên trong ô này
                         $ps = $xpath->query('.//w:p', $tc);
                         $ansInCell = [];
                         foreach ($ps as $p) {
                             if (preg_match('/^\s*([A-Da-d])\s*([\.\\)])/u', $p->textContent, $m)) {
-                                $ansInCell[strtoupper($m[1])] = [
-                                    'node' => $p,
-                                    'is_lower' => ctype_lower($m[1])
-                                ];
+                                $ansInCell[strtoupper($m[1])] = ['node' => $p, 'is_lower' => ctype_lower($m[1])];
                             }
                         }
 
-                        // TRƯỜNG HỢP CÂU 24: Nhồi 4 đáp án vào 1 ô -> Lưu vào BoxAnswers
                         if (count($ansInCell) >= 2) {
-                            foreach ($ansInCell as $key => $ansData) {
-                                $boxAnswers[$key] = $ansData;
-                            }
-                        } 
-                        // TRƯỜNG HỢP CHUẨN: 1 ô 1 đáp án
-                        elseif (preg_match('/^([A-Da-d])\s*([\.\\)])/u', $tcText, $m)) {
-                            $layoutCells[strtoupper($m[1])] = [
-                                'node' => $tc,
-                                'is_lower' => ctype_lower($m[1])
-                            ];
+                            foreach ($ansInCell as $key => $ansData) { $boxAnswers[$key] = $ansData; }
+                        } elseif (preg_match('/^([A-Da-d])\s*([\.\\)])/u', $tcText, $m)) {
+                            $layoutCells[strtoupper($m[1])] = ['node' => $tc, 'is_lower' => ctype_lower($m[1])];
                         }
                     }
 
-                    // TỰ ĐỘNG ĐẬP HỘP: Biến bảng dị dạng thành các dòng bình thường
                     if (count($boxAnswers) >= 2) {
+                        $sections[$currentSection]['questions'][$currentQuestion]['has_seen_answers'] = true;
                         foreach ($boxAnswers as $key => $ansData) {
                             $pNode = $ansData['node'];
                             $sections[$currentSection]['questions'][$currentQuestion]['answers'][$key] = $pNode;
@@ -299,10 +342,9 @@ class QuizShufflerService
                                 $sections[$currentSection]['questions'][$currentQuestion]['correct_key'] = $key;
                             }
                         }
-                        $nodesToRemove[] = $node; // Phá hủy bảng gốc đi
-                    } 
-                    // XỬ LÝ BẢNG CHUẨN
-                    elseif (count($layoutCells) >= 2) {
+                        $nodesToRemove[] = $node; 
+                    } elseif (count($layoutCells) >= 2) {
+                        $sections[$currentSection]['questions'][$currentQuestion]['has_seen_answers'] = true;
                         $answerCells = [];
                         foreach ($layoutCells as $key => $ansData) {
                             $tcNode = $ansData['node'];
@@ -322,14 +364,19 @@ class QuizShufflerService
                         ];
                         $nodesToRemove[] = $node;
                     } else {
-                        // Bảng nội dung của đề bài
-                        $sections[$currentSection]['questions'][$currentQuestion]['question_nodes'][] = $node;
+                        // Bảng là text phụ trước hoặc sau
+                        if (!$sections[$currentSection]['questions'][$currentQuestion]['has_seen_answers']) {
+                            $sections[$currentSection]['questions'][$currentQuestion]['question_nodes'][] = $node;
+                        } else {
+                            $sections[$currentSection]['questions'][$currentQuestion]['post_question_nodes'][] = $node;
+                        }
                         $nodesToRemove[] = $node;
                     }
                     continue;
-                }
+                } 
                 elseif (preg_match('/^\s*([A-Da-d])\s*([\.\\)])/u', $text, $m)) {
                     $ansKey = strtoupper($m[1]);
+                    $sections[$currentSection]['questions'][$currentQuestion]['has_seen_answers'] = true;
                     
                     if (preg_match('/(Đúng|Sai)/iu', $text, $tfMatch)) {
                         $sections[$currentSection]['questions'][$currentQuestion]['tf_key_nodes'][$ansKey] = [
@@ -341,7 +388,6 @@ class QuizShufflerService
 
                     $sections[$currentSection]['questions'][$currentQuestion]['is_lower_case'] = ctype_lower($m[1]);
 
-                    // SOI GẠCH CHÂN Ở DÒNG THƯỜNG
                     $isCorrect = $this->isNodeUnderlined($node, $dom);
                     if (str_contains($currentSection, 'Phần II')) {
                         $sections[$currentSection]['questions'][$currentQuestion]['tf_answers'][$ansKey] = $isCorrect ? 'Đ' : 'S';
@@ -351,7 +397,12 @@ class QuizShufflerService
                     $nodesToRemove[] = $node;
                 } 
                 else {
-                    $sections[$currentSection]['questions'][$currentQuestion]['question_nodes'][] = $node;
+                    // Xử lý text phụ (Mở bài hoặc Ghi chú câu)
+                    if (!$sections[$currentSection]['questions'][$currentQuestion]['has_seen_answers']) {
+                        $sections[$currentSection]['questions'][$currentQuestion]['question_nodes'][] = $node;
+                    } else {
+                        $sections[$currentSection]['questions'][$currentQuestion]['post_question_nodes'][] = $node;
+                    }
                     $nodesToRemove[] = $node;
                 }
             } elseif ($currentSection !== 'default') {
@@ -361,14 +412,14 @@ class QuizShufflerService
         }
 
         foreach ($nodesToRemove as $n) { if ($n->parentNode) $n->parentNode->removeChild($n); }
-        return [$dom, $body, $sections];
+        return [$dom, $body, $sections, $globalFooterNodes];
     }
 
     // ================================================================
     // BƯỚC 2: TRÁO, RÁP, TẨY GẠCH CHÂN VÀ LƯU CSV
     // ================================================================
 
-    private function shuffleAndRebuild(DOMDocument $dom, $body, array $sections, $maDe): void
+    private function shuffleAndRebuild(DOMDocument $dom, $body, array $sections, array $globalFooterNodes, string $maDe): void
     {
         $xpath = new DOMXPath($dom);
         $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
@@ -389,7 +440,7 @@ class QuizShufflerService
             $questionKeys = array_keys($questions);
             shuffle($questionKeys);
 
-            $qSecIdx = 1; // Số thứ tự câu bắt đầu lại từ 1 cho mỗi phần
+            $qSecIdx = 1; 
 
             foreach ($questionKeys as $qKey) {
                 $qData = $questions[$qKey];
@@ -397,11 +448,12 @@ class QuizShufflerService
                 $firstQNode = $qData['question_nodes'][0];
                 $this->replacePrefixInNode($firstQNode, '/^\s*Câu\s+\d+\s*([\.\\:])/iu', "Câu {$qSecIdx}$1");
 
+                // In phần Mở bài của câu hỏi
                 foreach ($qData['question_nodes'] as $qn) { $safeAppend($qn); }
 
+                // In và tráo đáp án
                 $shuffleResult = $this->shuffleAnswers($dom, $xpath, $body, $qData, $isPartII, $safeAppend);
                 
-                // Xử lý nhãn Đúng/Sai text (Tương thích ngược)
                 if (!empty($qData['tf_key_nodes']) && !empty($shuffleResult['shuffledKeysMap'])) {
                     $visualKeys = $qData['is_lower_case'] ? range('a', 'z') : range('A', 'Z');
                     foreach ($shuffleResult['shuffledKeysMap'] as $newIndex => $oldKey) {
@@ -414,12 +466,21 @@ class QuizShufflerService
                     }
                 }
 
-                // Lưu vào Ma trận Đáp án đa tầng
+                // In phần text phụ nằm phía DƯỚI đáp án (nếu có)
+                if (!empty($qData['post_question_nodes'])) {
+                    foreach ($qData['post_question_nodes'] as $pqn) { $safeAppend($pqn); }
+                }
+
                 $finalAns = $isPartII ? implode('', $shuffleResult['tfResult']) : $shuffleResult['newCorrectKey'];
                 $this->answerMap[$maDe][$sectionName][$qSecIdx] = $finalAns;
 
                 $qSecIdx++;
             }
+        }
+
+        // [QUAN TRỌNG]: In chữ HẾT và Ghi chú ở dưới cùng văn bản
+        foreach ($globalFooterNodes as $fn) {
+            $safeAppend($fn);
         }
     }
 
@@ -509,7 +570,7 @@ class QuizShufflerService
     {
         $path = storage_path('app/temp_uploads/DapAn_'.time().'.csv');
         $file = fopen($path, 'w');
-        fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF)); // BOM UTF-8
+        fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF)); 
 
         fputcsv($file, ['{thông tin trường}', $originalFileName, '', '', '']);
         fputcsv($file, ['{môn thi}', '', '', '', '']);
@@ -580,7 +641,6 @@ class QuizShufflerService
         foreach ($texts as $t) { $fullText .= $t->nodeValue; }
         
         if (preg_match($pattern, $fullText, $matches)) {
-            // [FIX LỖI $1]: Tự động thay $1 bằng dấu (., :, )) đã bắt được
             if (str_contains($replacement, '$1') && isset($matches[1])) {
                 $replacement = str_replace('$1', $matches[1], $replacement);
             }
