@@ -134,13 +134,13 @@ class QuizController extends Controller
                 unlink($absolutePath);
             }
 
-            $fileName = 'de-thi-tron-' . $copies . '-ma_' . time() . '.docx';
+           $fileName = 'Bo_De_Thi_Tron_' . $copies . '_Ma_' . time() . '.zip'; // Sửa chữ .docx thành .zip
 
             return response()->download(
                 file:    $outputPath,
                 name:    $fileName,
                 headers: [
-                    'Content-Type'        => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    'Content-Type'        => 'application/zip', // Sửa content type thành zip
                     'Content-Disposition' => "attachment; filename=\"{$fileName}\"",
                     'Cache-Control'       => 'no-store',
                 ],

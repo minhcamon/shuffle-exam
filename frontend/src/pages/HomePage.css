@@ -1,36 +1,53 @@
-/* HomePage.css */
+/* ================================================================
+   HomePage.css — Single-column, vertically & horizontally centered
+   ================================================================ */
 
+/* ── Page wrapper ── */
 .home-page {
   min-height: 100vh;
-  padding-bottom: 4rem;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Centered content area ── */
+.home-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;        /* Căn giữa dọc */
+  padding: 4rem 1.5rem 2rem;
+  width: 100%;
 }
 
 /* ── Hero ── */
 .hero {
   text-align: center;
-  padding: 5rem 1.5rem 3rem;
+  margin-bottom: 1.75rem;
+  width: 100%;
+  max-width: 600px;
 }
 
 .hero__badge {
   display: inline-block;
-  background: linear-gradient(135deg, rgba(124,58,237,0.2), rgba(6,182,212,0.2));
-  border: 1px solid rgba(124,58,237,0.4);
+  background: linear-gradient(135deg, rgba(124,58,237,0.15), rgba(6,182,212,0.15));
+  border: 1px solid rgba(124,58,237,0.35);
   color: var(--color-accent);
-  padding: 0.35rem 1rem;
+  padding: 0.3rem 0.9rem;
   border-radius: 999px;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: 0.05em;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
 }
 
 .hero__title {
-  font-size: clamp(2.5rem, 6vw, 4rem);
+  font-size: clamp(1.75rem, 4vw, 2.6rem);
   font-weight: 800;
-  line-height: 1.15;
-  letter-spacing: -0.02em;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
   color: var(--color-text);
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
 }
 
 .hero__title--accent {
@@ -41,46 +58,80 @@
 }
 
 .hero__subtitle {
-  font-size: 1.05rem;
+  font-size: 0.95rem;
   color: var(--color-text-muted);
-  max-width: 540px;
-  margin: 0 auto;
   line-height: 1.7;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+/* ── Main section: constrain upload card width ── */
+main {
+  width: 100%;
+  max-width: 540px;
 }
 
 /* ── Upload Card ── */
 .upload-card {
-  animation-delay: var(--delay, 0s);
-  margin-bottom: 2rem;
+  margin-bottom: 1.25rem;
 }
 
-.form-section { margin-bottom: 2rem; }
+/* Nút Xem trước nội dung */
+.btn-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.85rem;
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  border: 1.5px dashed var(--color-accent);
+  background: rgba(6, 182, 212, 0.06);
+  color: var(--color-accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: var(--transition);
+  width: 100%;
+  justify-content: center;
+}
+
+.btn-preview:hover {
+  background: rgba(6, 182, 212, 0.14);
+  border-style: solid;
+  transform: translateY(-1px);
+}
+
+
+.form-section {
+  margin-bottom: 1.4rem;
+}
 
 .form-label {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 600;
   color: var(--color-text);
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.65rem;
 }
 
 .step-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   background: var(--color-primary);
   color: white;
   border-radius: 50%;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 700;
   flex-shrink: 0;
 }
 
-/* Copies input */
+/* Copies */
 .copies-control {
   display: flex;
   align-items: center;
@@ -88,13 +139,13 @@
 }
 
 .copies-input {
-  width: 90px;
-  padding: 0.65rem 0.9rem;
+  width: 80px;
+  padding: 0.55rem 0.8rem;
   background: var(--color-surface-alt);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   color: var(--color-text);
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 700;
   text-align: center;
   transition: var(--transition);
@@ -107,26 +158,26 @@
 }
 
 .copies-hint {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: var(--color-text-muted);
 }
 
 /* Error */
 .api-error {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(239,68,68,0.08);
+  border: 1px solid rgba(239,68,68,0.3);
   color: var(--color-error);
-  padding: 0.9rem 1.2rem;
+  padding: 0.75rem 1rem;
   border-radius: var(--radius-sm);
-  font-size: 0.9rem;
-  margin-bottom: 1.5rem;
+  font-size: 0.88rem;
+  margin-bottom: 1.25rem;
 }
 
 /* Progress */
-.progress-wrapper { margin-bottom: 1.5rem; }
+.progress-wrapper { margin-bottom: 1.25rem; }
 
 .progress-bar {
-  height: 6px;
+  height: 5px;
   background: var(--color-border);
   border-radius: 999px;
   overflow: hidden;
@@ -141,42 +192,54 @@
 }
 
 .progress-text {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   color: var(--color-text-muted);
   text-align: center;
 }
 
-/* Submit button */
+/* Submit */
 .submit-btn {
   width: 100%;
   justify-content: center;
-  font-size: 1.05rem;
-  padding: 1rem;
-}
-
-/* ── Features ── */
-.features {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1rem;
-}
-
-.feature-card {
-  text-align: center;
-  padding: 1.5rem;
-}
-
-.feature-icon { font-size: 2rem; display: block; margin-bottom: 0.75rem; }
-
-.feature-title {
   font-size: 1rem;
-  font-weight: 700;
-  color: var(--color-text);
-  margin-bottom: 0.35rem;
+  padding: 0.9rem;
 }
 
-.feature-desc {
-  font-size: 0.85rem;
+/* ── Feature pills (horizontal row) ── */
+.features {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.feature-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: 0.8rem;
   color: var(--color-text-muted);
-  line-height: 1.5;
+  transition: var(--transition);
+}
+
+.feature-pill:hover {
+  border-color: var(--color-primary);
+  color: var(--color-text);
+}
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+  .home-center {
+    padding: 3.5rem 1rem 1.5rem;
+    justify-content: flex-start;  /* Mobile: top-align để không bị overflow */
+  }
+
+  .hero__title {
+    font-size: 1.75rem;
+  }
 }
