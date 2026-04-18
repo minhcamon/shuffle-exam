@@ -12,8 +12,7 @@
         "php": "^8.2",
         "ext-zip": "*",
         "ext-xml": "*",
-        "laravel/framework": "^11.0",
-        "phpoffice/phpword": "^1.2"
+        "laravel/framework": "^11.0"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
