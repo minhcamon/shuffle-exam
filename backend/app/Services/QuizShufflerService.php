@@ -615,8 +615,8 @@ class QuizShufflerService
         $sheet->setCellValue('A1', '{thông tin trường}');
         $sheet->setCellValue('B1', $originalFileName);
         $sheet->setCellValue('A2', '{môn thi}');
-        $sheet->setCellValue('A3', 'Thời gian làm bài: 50 phút (Không kể thời gian giao đề)');
-        $sheet->setCellValue('A4', '-------------------------');
+        $sheet->setCellValue('A3', 'Thời gian làm bài:');
+        $sheet->setCellValue('A4', '------------');
 
         // 2. In nhãn bảng
         $sheet->setCellValue('A5', 'Câu hỏi');
