@@ -27,6 +27,14 @@ COPY . /var/www/html
 # Cho phép Composer chạy dưới quyền quản trị (Root) trong Docker
 ENV COMPOSER_ALLOW_SUPERUSER=1
 
+# Cài đặt các thư viện lõi của Linux để hỗ trợ xử lý ảnh cho GD
+RUN apt-get update && apt-get install -y \
+    libfreetype6-dev \
+    libjpeg62-turbo-dev \
+    libpng-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install -j$(nproc) gd
+
 # Cài đặt Composer và chạy lệnh install
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 RUN composer install --no-dev --optimize-autoloader
