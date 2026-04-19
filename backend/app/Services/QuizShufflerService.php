@@ -8,6 +8,8 @@ use ZipArchive;
 use DOMDocument;
 use DOMXPath;
 use Illuminate\Support\Facades\Log;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class QuizShufflerService
 {
@@ -54,11 +56,15 @@ class QuizShufflerService
             $generatedFiles[] = $tempDocx;
         }
 
-        $csvPath = $this->generateAnswerKeyCSV($customCodes, $originalFileName);
-        $finalZip->addFile($csvPath, "DapAn_TongHop.csv");
+        // $csvPath = $this->generateAnswerKeyCSV($customCodes, $originalFileName);
+        // $finalZip->addFile($csvPath, "DapAn_TongHop.csv");
+        // $this->cleanup(..., array_merge($generatedFiles, [$csvPath]));
+
+        $excelPath = $this->generateAnswerKeyExcel($customCodes, $originalFileName);
+        $finalZip->addFile($excelPath, "DapAn_TongHop.xlsx");
 
         $finalZip->close();
-        $this->cleanup($workspace, $xmlBackupPath, array_merge($generatedFiles, [$csvPath]));
+        $this->cleanup($workspace, $xmlBackupPath, array_merge($generatedFiles, [$excelPath]));
 
         return $outputZipPath;
     }
@@ -593,6 +599,71 @@ class QuizShufflerService
             }
         }
         fclose($file);
+        return $path;
+    }
+
+   // ================================================================
+    // BƯỚC 3: XUẤT EXCEL CHUẨN (.XLSX) - TƯƠNG THÍCH PHPSPREADSHEET 3.X
+    // ================================================================
+
+    private function generateAnswerKeyExcel(array $codes, string $originalFileName): string
+    {
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+
+        // 1. In thông tin Header
+        $sheet->setCellValue('A1', '{thông tin trường}');
+        $sheet->setCellValue('B1', $originalFileName);
+        $sheet->setCellValue('A2', '{môn thi}');
+        $sheet->setCellValue('A3', 'Thời gian làm bài: 50 phút (Không kể thời gian giao đề)');
+        $sheet->setCellValue('A4', '-------------------------');
+
+        // 2. In nhãn bảng
+        $sheet->setCellValue('A5', 'Câu hỏi');
+        $sheet->setCellValue('B5', 'Mã đề thi');
+
+        // 3. In danh sách mã đề (Hàng 6)
+        $col = 2; // Cột B (tương đương index 2)
+        foreach ($codes as $code) {
+            // Dịch số thành chữ cái (Ví dụ: 2 -> 'B')
+            $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col);
+            $sheet->setCellValue($colLetter . '6', $code);
+            $col++;
+        }
+
+        // 4. In dữ liệu đáp án đa tầng (Từ Hàng 7 trở đi)
+        $firstCode = reset($codes);
+        $row = 7;
+        if ($firstCode && isset($this->answerMap[$firstCode])) {
+            foreach ($this->answerMap[$firstCode] as $secName => $questions) {
+                $numQs = count($questions);
+                for ($i = 1; $i <= $numQs; $i++) {
+                    $sheet->setCellValue('A' . $row, $i); // In số thứ tự ở Cột A
+                    
+                    $col = 2; 
+                    foreach ($codes as $code) {
+                        $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col);
+                        $ans = $this->answerMap[$code][$secName][$i] ?? '';
+                        $sheet->setCellValue($colLetter . $row, $ans);
+                        $col++;
+                    }
+                    $row++;
+                }
+            }
+        }
+
+        // 5. Làm đẹp: Tự động căn chỉnh độ rộng cột
+        $totalCols = count($codes) + 1;
+        for ($c = 1; $c <= $totalCols; $c++) {
+            $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($c);
+            $sheet->getColumnDimension($colLetter)->setAutoSize(true);
+        }
+
+        // 6. Lưu ra file .xlsx
+        $path = storage_path('app/temp_uploads/DapAn_TongHop_'.time().'.xlsx');
+        $writer = new Xlsx($spreadsheet);
+        $writer->save($path);
+
         return $path;
     }
 
