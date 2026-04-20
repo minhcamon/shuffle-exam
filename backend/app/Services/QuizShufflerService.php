@@ -312,29 +312,137 @@ class QuizShufflerService
                     continue;
                 }
 
+                // if ($node->nodeName === 'w:tbl') {
+                //     $tcs = $xpath->query('.//w:tc', $node);
+                //     $boxAnswers = [];
+                //     $layoutCells = [];
+
+                //     foreach ($tcs as $tc) {
+                //         $tcText = trim($tc->textContent);
+                //         $ps = $xpath->query('.//w:p', $tc);
+                //         $ansInCell = [];
+                //         foreach ($ps as $p) {
+                //             if (preg_match('/^\s*([A-Da-d])\s*([\.\\)])/u', $p->textContent, $m)) {
+                //                 $ansInCell[strtoupper($m[1])] = ['node' => $p, 'is_lower' => ctype_lower($m[1])];
+                //             }
+                //         }
+
+                //         if (count($ansInCell) >= 2) {
+                //             foreach ($ansInCell as $key => $ansData) { $boxAnswers[$key] = $ansData; }
+                //         } elseif (preg_match('/^([A-Da-d])\s*([\.\\)])/u', $tcText, $m)) {
+                //             $layoutCells[strtoupper($m[1])] = ['node' => $tc, 'is_lower' => ctype_lower($m[1])];
+                //         }
+                //     }
+
+                //     if (count($boxAnswers) >= 2) {
+                //         $sections[$currentSection]['questions'][$currentQuestion]['has_seen_answers'] = true;
+                //         foreach ($boxAnswers as $key => $ansData) {
+                //             $pNode = $ansData['node'];
+                //             $sections[$currentSection]['questions'][$currentQuestion]['answers'][$key] = $pNode;
+                //             $sections[$currentSection]['questions'][$currentQuestion]['is_lower_case'] = $ansData['is_lower'];
+
+                //             $isCorrect = $this->isNodeUnderlined($pNode, $dom);
+                //             if (str_contains($currentSection, 'Phần II')) {
+                //                 $sections[$currentSection]['questions'][$currentQuestion]['tf_answers'][$key] = $isCorrect ? 'Đ' : 'S';
+                //             } elseif ($isCorrect) {
+                //                 $sections[$currentSection]['questions'][$currentQuestion]['correct_key'] = $key;
+                //             }
+                //         }
+                //         $nodesToRemove[] = $node; 
+                //     } elseif (count($layoutCells) >= 2) {
+                //         $sections[$currentSection]['questions'][$currentQuestion]['has_seen_answers'] = true;
+                //         $answerCells = [];
+                //         foreach ($layoutCells as $key => $ansData) {
+                //             $tcNode = $ansData['node'];
+                //             $answerCells[$key] = $tcNode;
+                //             $sections[$currentSection]['questions'][$currentQuestion]['is_lower_case'] = $ansData['is_lower'];
+
+                //             $isCorrect = $this->isNodeUnderlined($tcNode, $dom);
+                //             if (str_contains($currentSection, 'Phần II')) {
+                //                 $sections[$currentSection]['questions'][$currentQuestion]['tf_answers'][$key] = $isCorrect ? 'Đ' : 'S';
+                //             } elseif ($isCorrect) {
+                //                 $sections[$currentSection]['questions'][$currentQuestion]['correct_key'] = $key;
+                //             }
+                //         }
+                //         $sections[$currentSection]['questions'][$currentQuestion]['table_answers'] = [
+                //             'table_node' => $node,
+                //             'cells'      => $answerCells,
+                //         ];
+                //         $nodesToRemove[] = $node;
+                //     } else {
+                //         // Bảng là text phụ trước hoặc sau
+                //         if (!$sections[$currentSection]['questions'][$currentQuestion]['has_seen_answers']) {
+                //             $sections[$currentSection]['questions'][$currentQuestion]['question_nodes'][] = $node;
+                //         } else {
+                //             $sections[$currentSection]['questions'][$currentQuestion]['post_question_nodes'][] = $node;
+                //         }
+                //         $nodesToRemove[] = $node;
+                //     }
+                //     continue;
+                // } 
                 if ($node->nodeName === 'w:tbl') {
                     $tcs = $xpath->query('.//w:tc', $node);
                     $boxAnswers = [];
                     $layoutCells = [];
+                    
+                    // --- BỘ KHIÊN BẢO VỆ (CHỐNG NHẬN DIỆN NHẦM BẢNG DỮ LIỆU) ---
+                    $isContentTable = false;
+                    $firstTextInTable = '';
+                    $hasNumberedList = false;
 
                     foreach ($tcs as $tc) {
                         $tcText = trim($tc->textContent);
                         $ps = $xpath->query('.//w:p', $tc);
                         $ansInCell = [];
+                        $firstValidText = ''; 
+                        
                         foreach ($ps as $p) {
-                            if (preg_match('/^\s*([A-Da-d])\s*([\.\\)])/u', $p->textContent, $m)) {
-                                $ansInCell[strtoupper($m[1])] = ['node' => $p, 'is_lower' => ctype_lower($m[1])];
+                            $pText = trim($p->textContent);
+                            if ($pText !== '') {
+                                // Lấy đoạn text đầu tiên có chứa chữ của cả bảng
+                                if ($firstTextInTable === '') {
+                                    $firstTextInTable = $pText;
+                                }
+
+                                // Bắt đáp án a, b, c, d
+                                if (preg_match('/^\s*([A-Da-d])\s*([\.\\)])/u', $pText, $m)) {
+                                    $ansInCell[strtoupper($m[1])] = [
+                                        'node' => $p,
+                                        'is_lower' => ctype_lower($m[1])
+                                    ];
+                                }
+                                
+                                // Bắt danh sách 1., 2., 3. hoặc I., II., III.
+                                if (empty($firstValidText)) {
+                                    $firstValidText = $pText;
+                                    if (preg_match('/^\s*(\d+|[IVX]+)\s*[\.\)]/iu', $firstValidText)) {
+                                        $hasNumberedList = true;
+                                    }
+                                }
                             }
                         }
 
                         if (count($ansInCell) >= 2) {
-                            foreach ($ansInCell as $key => $ansData) { $boxAnswers[$key] = $ansData; }
+                            foreach ($ansInCell as $key => $ansData) { 
+                                $boxAnswers[$key] = $ansData; 
+                            }
                         } elseif (preg_match('/^([A-Da-d])\s*([\.\\)])/u', $tcText, $m)) {
                             $layoutCells[strtoupper($m[1])] = ['node' => $tc, 'is_lower' => ctype_lower($m[1])];
                         }
                     }
 
-                    if (count($boxAnswers) >= 2) {
+                    // --- KÍCH HOẠT KHIÊN ---
+                    // 1. Nếu ô đầu tiên của bảng là Tiêu đề (không phải A, B, C, D)
+                    if ($firstTextInTable !== '' && !preg_match('/^\s*([A-Da-d])\s*([\.\\)])/u', $firstTextInTable)) {
+                        $isContentTable = true;
+                    }
+                    // 2. Nếu trong bảng có chứa danh sách nối cột (1., 2., 3.)
+                    if ($hasNumberedList) {
+                        $isContentTable = true;
+                    }
+
+                    // --- TIẾN HÀNH XỬ LÝ DỰA TRÊN KẾT QUẢ KHIÊN ---
+                    if (!$isContentTable && count($boxAnswers) >= 2) {
                         $sections[$currentSection]['questions'][$currentQuestion]['has_seen_answers'] = true;
                         foreach ($boxAnswers as $key => $ansData) {
                             $pNode = $ansData['node'];
@@ -349,7 +457,7 @@ class QuizShufflerService
                             }
                         }
                         $nodesToRemove[] = $node; 
-                    } elseif (count($layoutCells) >= 2) {
+                    } elseif (!$isContentTable && count($layoutCells) >= 2) {
                         $sections[$currentSection]['questions'][$currentQuestion]['has_seen_answers'] = true;
                         $answerCells = [];
                         foreach ($layoutCells as $key => $ansData) {
@@ -370,7 +478,7 @@ class QuizShufflerService
                         ];
                         $nodesToRemove[] = $node;
                     } else {
-                        // Bảng là text phụ trước hoặc sau
+                        // NẾU BỊ KHIÊN CHẶN (BẢNG NỘI DUNG) -> Gắn chặt vào đề bài, không được tráo
                         if (!$sections[$currentSection]['questions'][$currentQuestion]['has_seen_answers']) {
                             $sections[$currentSection]['questions'][$currentQuestion]['question_nodes'][] = $node;
                         } else {
@@ -379,7 +487,7 @@ class QuizShufflerService
                         $nodesToRemove[] = $node;
                     }
                     continue;
-                } 
+                }
                 elseif (preg_match('/^\s*([A-Da-d])\s*([\.\\)])/u', $text, $m)) {
                     $ansKey = strtoupper($m[1]);
                     $sections[$currentSection]['questions'][$currentQuestion]['has_seen_answers'] = true;
