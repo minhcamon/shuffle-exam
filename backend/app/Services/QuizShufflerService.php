@@ -86,9 +86,16 @@ class QuizShufflerService
         $xpath = new DOMXPath($dom);
         $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
 
-        $styles = $xpath->query('//w:style[.//w:u[not(@w:val="none")]]');
+        $styles = $xpath->query('//*[local-name()="style" and .//*[local-name()="u" and not(@*[local-name()="val"]="none")]]');
         foreach ($styles as $style) {
-            if ($styleId = $style->getAttribute('w:styleId')) {
+            $styleId = '';
+            foreach ($style->attributes as $attr) {
+                if ($attr->localName === 'styleId') {
+                    $styleId = $attr->nodeValue;
+                    break;
+                }
+            }
+            if ($styleId) {
                 $this->underlinedStyles[] = $styleId;
             }
         }
@@ -100,13 +107,19 @@ class QuizShufflerService
         $xpath = new DOMXPath($dom);
         $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
         
-        if ($xpath->query('.//w:u[not(@w:val="none")]', $node)->length > 0) return true;
-        if ($xpath->query('.//w:pBdr/w:bottom[not(@w:val="none")] | .//w:bdr[not(@w:val="none")]', $node)->length > 0) return true;
-        if ($xpath->query('.//w:highlight[not(@w:val="none")]', $node)->length > 0) return true;
+        if ($xpath->query('.//*[local-name()="u" and not(@*[local-name()="val"]="none")]', $node)->length > 0) return true;
+        if ($xpath->query('.//*[local-name()="pBdr"]/*[local-name()="bottom" and not(@*[local-name()="val"]="none")] | .//*[local-name()="bdr" and not(@*[local-name()="val"]="none")]', $node)->length > 0) return true;
+        if ($xpath->query('.//*[local-name()="highlight" and not(@*[local-name()="val"]="none")]', $node)->length > 0) return true;
 
-        $styles = $xpath->query('.//w:rStyle', $node);
+        $styles = $xpath->query('.//*[local-name()="rStyle"]', $node);
         foreach ($styles as $style) {
-            $val = $style->getAttribute('w:val');
+            $val = '';
+            foreach ($style->attributes as $attr) {
+                if ($attr->localName === 'val') {
+                    $val = $attr->nodeValue;
+                    break;
+                }
+            }
             if (in_array($val, $this->underlinedStyles) || stripos($val, 'underline') !== false) {
                 return true;
             }
@@ -120,15 +133,21 @@ class QuizShufflerService
         $xpath = new DOMXPath($node->ownerDocument);
         $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
         
-        $query = './/w:u | .//w:pBdr/w:bottom | .//w:bdr | .//w:highlight';
+        $query = './/*[local-name()="u"] | .//*[local-name()="pBdr"]/*[local-name()="bottom"] | .//*[local-name()="bdr"] | .//*[local-name()="highlight"]';
         $elements = $xpath->query($query, $node);
         
         $remove = [];
         foreach ($elements as $el) { $remove[] = $el; }
         
-        $styles = $xpath->query('.//w:rStyle', $node);
+        $styles = $xpath->query('.//*[local-name()="rStyle"]', $node);
         foreach ($styles as $style) {
-            $val = $style->getAttribute('w:val');
+            $val = '';
+            foreach ($style->attributes as $attr) {
+                if ($attr->localName === 'val') {
+                    $val = $attr->nodeValue;
+                    break;
+                }
+            }
             if (in_array($val, $this->underlinedStyles) || stripos($val, 'underline') !== false) {
                 $remove[] = $style;
             }
@@ -143,11 +162,11 @@ class QuizShufflerService
     private function replaceCodeInDOM(DOMDocument $dom, string $newCode): bool {
         $xpath = new DOMXPath($dom);
         $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
-        $paragraphs = $xpath->query('//w:p');
+        $paragraphs = $xpath->query('//*[local-name()="p"]');
         $isModified = false;
 
         foreach ($paragraphs as $p) {
-            $tNodes = $xpath->query('.//w:t', $p);
+            $tNodes = $xpath->query('.//*[local-name()="t"]', $p);
             if ($tNodes->length === 0) continue;
 
             // 1. Gom toàn bộ text trong dòng để kiểm tra
@@ -248,7 +267,7 @@ class QuizShufflerService
             
             // Xóa dòng trống
             if (trim($text) === '') {
-                if ($node->nodeName === 'w:p') {
+                if ($node->localName === 'p') {
                     if ($currentQuestion !== null) {
                         if (!$sections[$currentSection]['questions'][$currentQuestion]['has_seen_answers']) {
                             $sections[$currentSection]['questions'][$currentQuestion]['question_nodes'][] = $node;
@@ -276,7 +295,7 @@ class QuizShufflerService
             }
 
             // Nhận diện Phần
-            if (preg_match('/^\s*Phần\s+([I,V,X,1-9]+)/i', $text, $matches)) {
+            if (preg_match('/^\s*Phần\s+([I,V,X,1-9]+)/iu', $text, $matches)) {
                 $currentSection = trim($matches[0]);
                 $currentQuestion = null;
                 $sections[$currentSection] = ['header_nodes' => [$node], 'questions' => []];
@@ -289,7 +308,7 @@ class QuizShufflerService
             }
 
             // Nhận diện Câu hỏi
-            if (preg_match('/^\s*Câu\s+(\d+)\s*[\.\\:]/i', $text, $matches)) {
+            if (preg_match('/^\s*Câu\s+(\d+)\s*[\.\\:]/iu', $text, $matches)) {
                 $currentQuestion = 'Câu ' . $matches[1];
                 $sections[$currentSection]['questions'][$currentQuestion] = [
                     'question_nodes'      => [$node],
@@ -301,6 +320,7 @@ class QuizShufflerService
                     'correct_key'         => null,
                     'is_lower_case'       => false,
                     'tf_key_nodes'        => [],
+                    'question_type'       => 'UNKNOWN',
                 ];
                 $nodesToRemove[] = $node;
                 continue;
@@ -380,8 +400,8 @@ class QuizShufflerService
                 //     }
                 //     continue;
                 // } 
-                if ($node->nodeName === 'w:tbl') {
-                    $tcs = $xpath->query('.//w:tc', $node);
+                if ($node->localName === 'tbl') {
+                    $tcs = $xpath->query('.//*[local-name()="tc"]', $node);
                     $boxAnswers = [];
                     $layoutCells = [];
                     
@@ -392,12 +412,13 @@ class QuizShufflerService
 
                     foreach ($tcs as $tc) {
                         $tcText = trim($tc->textContent);
-                        $ps = $xpath->query('.//w:p', $tc);
+                        $ps = $xpath->query('.//*[local-name()="p"]', $tc);
                         $ansInCell = [];
                         $firstValidText = ''; 
                         
                         foreach ($ps as $p) {
                             $pText = trim($p->textContent);
+                            
                             if ($pText !== '') {
                                 // Lấy đoạn text đầu tiên có chứa chữ của cả bảng
                                 if ($firstTextInTable === '') {
@@ -405,7 +426,7 @@ class QuizShufflerService
                                 }
 
                                 // Bắt đáp án a, b, c, d
-                                if (preg_match('/^\s*([A-Da-d])\s*([\.\\)])/u', $pText, $m)) {
+                                if (preg_match('/^[\s\p{Zs}\x{200B}\x{FEFF}]*([A-Da-d])\s*([\.\\)])/u', $pText, $m)) {
                                     $ansInCell[strtoupper($m[1])] = [
                                         'node' => $p,
                                         'is_lower' => ctype_lower($m[1])
@@ -450,10 +471,14 @@ class QuizShufflerService
                             $sections[$currentSection]['questions'][$currentQuestion]['is_lower_case'] = $ansData['is_lower'];
 
                             $isCorrect = $this->isNodeUnderlined($pNode, $dom);
-                            if (str_contains($currentSection, 'Phần II')) {
+                            if ($ansData['is_lower']) {
                                 $sections[$currentSection]['questions'][$currentQuestion]['tf_answers'][$key] = $isCorrect ? 'Đ' : 'S';
-                            } elseif ($isCorrect) {
-                                $sections[$currentSection]['questions'][$currentQuestion]['correct_key'] = $key;
+                                $sections[$currentSection]['questions'][$currentQuestion]['question_type'] = 'TF';
+                            } else {
+                                if ($isCorrect) {
+                                    $sections[$currentSection]['questions'][$currentQuestion]['correct_key'] = $key;
+                                }
+                                $sections[$currentSection]['questions'][$currentQuestion]['question_type'] = 'MCQ';
                             }
                         }
                         $nodesToRemove[] = $node; 
@@ -466,10 +491,14 @@ class QuizShufflerService
                             $sections[$currentSection]['questions'][$currentQuestion]['is_lower_case'] = $ansData['is_lower'];
 
                             $isCorrect = $this->isNodeUnderlined($tcNode, $dom);
-                            if (str_contains($currentSection, 'Phần II')) {
+                            if ($ansData['is_lower']) {
                                 $sections[$currentSection]['questions'][$currentQuestion]['tf_answers'][$key] = $isCorrect ? 'Đ' : 'S';
-                            } elseif ($isCorrect) {
-                                $sections[$currentSection]['questions'][$currentQuestion]['correct_key'] = $key;
+                                $sections[$currentSection]['questions'][$currentQuestion]['question_type'] = 'TF';
+                            } else {
+                                if ($isCorrect) {
+                                    $sections[$currentSection]['questions'][$currentQuestion]['correct_key'] = $key;
+                                }
+                                $sections[$currentSection]['questions'][$currentQuestion]['question_type'] = 'MCQ';
                             }
                         }
                         $sections[$currentSection]['questions'][$currentQuestion]['table_answers'] = [
@@ -500,13 +529,18 @@ class QuizShufflerService
                         $sections[$currentSection]['questions'][$currentQuestion]['answers'][$ansKey] = $node;
                     }
 
-                    $sections[$currentSection]['questions'][$currentQuestion]['is_lower_case'] = ctype_lower($m[1]);
+                    $isLowerCase = ctype_lower($m[1]);
+                    $sections[$currentSection]['questions'][$currentQuestion]['is_lower_case'] = $isLowerCase;
 
                     $isCorrect = $this->isNodeUnderlined($node, $dom);
-                    if (str_contains($currentSection, 'Phần II')) {
+                    if ($isLowerCase) {
                         $sections[$currentSection]['questions'][$currentQuestion]['tf_answers'][$ansKey] = $isCorrect ? 'Đ' : 'S';
-                    } elseif ($isCorrect) {
-                        $sections[$currentSection]['questions'][$currentQuestion]['correct_key'] = $ansKey;
+                        $sections[$currentSection]['questions'][$currentQuestion]['question_type'] = 'TF';
+                    } else {
+                        if ($isCorrect) {
+                            $sections[$currentSection]['questions'][$currentQuestion]['correct_key'] = $ansKey;
+                        }
+                        $sections[$currentSection]['questions'][$currentQuestion]['question_type'] = 'MCQ';
                     }
                     $nodesToRemove[] = $node;
                 } 
@@ -538,7 +572,7 @@ class QuizShufflerService
         $xpath = new DOMXPath($dom);
         $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
         
-        $sectPrList = $xpath->query('./w:sectPr', $body);
+        $sectPrList = $xpath->query('./*[local-name()="sectPr"]', $body);
         $sectPr = $sectPrList->length > 0 ? $sectPrList->item($sectPrList->length - 1) : null;
 
         $safeAppend = function($node) use ($body, $sectPr) {
@@ -549,7 +583,6 @@ class QuizShufflerService
         foreach ($sections as $sectionName => $sectionData) {
             foreach ($sectionData['header_nodes'] as $hn) { $safeAppend($hn); }
 
-            $isPartII = str_contains($sectionName, 'Phần II');
             $questions = $sectionData['questions'];
             $questionKeys = array_keys($questions);
             shuffle($questionKeys);
@@ -558,6 +591,7 @@ class QuizShufflerService
 
             foreach ($questionKeys as $qKey) {
                 $qData = $questions[$qKey];
+                $qType = $qData['question_type'] ?? 'UNKNOWN';
 
                 $firstQNode = $qData['question_nodes'][0];
                 $this->replacePrefixInNode($firstQNode, '/^\s*Câu\s+\d+\s*([\.\\:])/iu', "Câu {$qSecIdx}$1");
@@ -566,7 +600,7 @@ class QuizShufflerService
                 foreach ($qData['question_nodes'] as $qn) { $safeAppend($qn); }
 
                 // In và tráo đáp án
-                $shuffleResult = $this->shuffleAnswers($dom, $xpath, $body, $qData, $isPartII, $safeAppend);
+                $shuffleResult = $this->shuffleAnswers($dom, $xpath, $body, $qData, $qType, $safeAppend);
                 
                 if (!empty($qData['tf_key_nodes']) && !empty($shuffleResult['shuffledKeysMap'])) {
                     $visualKeys = $qData['is_lower_case'] ? range('a', 'z') : range('A', 'Z');
@@ -585,7 +619,7 @@ class QuizShufflerService
                     foreach ($qData['post_question_nodes'] as $pqn) { $safeAppend($pqn); }
                 }
 
-                $finalAns = $isPartII ? implode('', $shuffleResult['tfResult']) : $shuffleResult['newCorrectKey'];
+                $finalAns = ($qType === 'TF') ? implode('', $shuffleResult['tfResult']) : $shuffleResult['newCorrectKey'];
                 $this->answerMap[$maDe][$sectionName][$qSecIdx] = $finalAns;
 
                 $qSecIdx++;
@@ -598,7 +632,7 @@ class QuizShufflerService
         }
     }
 
-    private function shuffleAnswers(DOMDocument $dom, DOMXPath $xpath, $body, array $qData, bool $isPartII, callable $safeAppend): array
+    private function shuffleAnswers(DOMDocument $dom, DOMXPath $xpath, $body, array $qData, string $qType, callable $safeAppend): array
     {
         $answers = $qData['answers'];
         $tableAnswers = $qData['table_answers'];
@@ -619,7 +653,7 @@ class QuizShufflerService
                 $upperNew = strtoupper($newLetter);
                 $node = $answers[$oldKey];
 
-                if ($isPartII && isset($qData['tf_answers'][$oldKey])) { $tfResult[$upperNew] = $qData['tf_answers'][$oldKey]; } 
+                if ($qType === 'TF' && isset($qData['tf_answers'][$oldKey])) { $tfResult[$upperNew] = $qData['tf_answers'][$oldKey]; } 
                 elseif ($oldKey === $qData['correct_key']) { $newCorrectKey = $upperNew; }
 
                 $this->stripUnderlineFromNode($node);
@@ -650,10 +684,10 @@ class QuizShufflerService
                 while ($targetCell->hasChildNodes()) { $targetCell->removeChild($targetCell->firstChild); }
                 foreach ($cloned[$shuffledKey] as $node) { $targetCell->appendChild($node); }
 
-                $firstP = $xpath->query('.//w:p', $targetCell)->item(0);
+                $firstP = $xpath->query('.//*[local-name()="p"]', $targetCell)->item(0);
                 if ($firstP) { $this->replacePrefixInNode($firstP, '/^\s*[A-Da-d]\s*([\.\\)])/u', "{$newLetter}$1"); }
 
-                if ($isPartII && isset($qData['tf_answers'][$shuffledKey])) { $tfResult[$upperNew] = $qData['tf_answers'][$shuffledKey]; } 
+                if ($qType === 'TF' && isset($qData['tf_answers'][$shuffledKey])) { $tfResult[$upperNew] = $qData['tf_answers'][$shuffledKey]; } 
                 elseif ($shuffledKey === $qData['correct_key']) { $newCorrectKey = $upperNew; }
                 
                 $this->stripUnderlineFromNode($targetCell);
@@ -662,7 +696,7 @@ class QuizShufflerService
         } else {
             foreach ($answers as $key => $node) {
                 $upper = strtoupper($key);
-                if ($isPartII) $tfResult[$upper] = $qData['tf_answers'][$key] ?? 'S';
+                if ($qType === 'TF') $tfResult[$upper] = $qData['tf_answers'][$key] ?? 'S';
                 elseif ($key === $qData['correct_key']) $newCorrectKey = $upper;
                 
                 $this->stripUnderlineFromNode($node);
@@ -783,14 +817,44 @@ class QuizShufflerService
         $workspace = storage_path('app/temp_workspace_' . uniqid());
         mkdir($workspace);
         $zip = new ZipArchive();
+        
         if ($zip->open($filePath) === true) {
             $zip->extractTo($workspace);
             $zip->close();
         } else {
+            $this->deleteDirectory($workspace);
             throw new RuntimeException("Không thể mở file .docx");
         }
+
+        $xmlOriginalPath = $workspace . '/word/document.xml';
+
+        // =================================================================
+        // LỚP LỌC SỐ 1: TIỀN XỬ LÝ (SANITIZATION LAYER)
+        // Lọc sạch mọi tàn dư của OCR và file Convert online trước khi xử lý
+        // =================================================================
+        if (file_exists($xmlOriginalPath)) {
+            $rawXml = file_get_contents($xmlOriginalPath);
+            
+            // 1. Tiêu diệt Homoglyphs: Đổi chữ Hy Lạp/Nga về chữ Latinh chuẩn
+            $rawXml = strtr($rawXml, [
+                'Α' => 'A', 'Β' => 'B', // Chữ Alpha, Beta (Hy Lạp)
+                'А' => 'A', 'В' => 'B', 'С' => 'C', // Chữ Cyrillic (Nga)
+                'α' => 'a', 'β' => 'b', // Chữ thường (Hy Lạp)
+                'а' => 'a', 'в' => 'b', 'с' => 'c' // Chữ thường (Nga)
+            ]);
+
+            // 2. Tiêu diệt Khoảng trắng tàng hình (Non-breaking space & Zero-width)
+            // Đổi tất cả thành dấu cách bình thường để hàm trim() có thể hoạt động
+            $rawXml = str_replace(["\xC2\xA0", "\xE2\x80\x8B", "\xEF\xBB\xBF"], ' ', $rawXml);
+
+            // Lưu lại bản sạch
+            file_put_contents($xmlOriginalPath, $rawXml);
+        }
+        // =================================================================
+
         $xmlBackupPath = $workspace . '/word/document_backup.xml';
-        copy($workspace . '/word/document.xml', $xmlBackupPath);
+        copy($xmlOriginalPath, $xmlBackupPath); // Giờ thì bản Backup cũng đã sạch bóng
+        
         $outputZipPath = storage_path('app/temp_uploads/result_' . time() . '.zip');
         $finalZip = new ZipArchive();
         $finalZip->open($outputZipPath, ZipArchive::CREATE);
@@ -815,7 +879,7 @@ class QuizShufflerService
     private function replacePrefixInNode(\DOMNode $node, string $pattern, string $replacement): void {
         $xpath = new DOMXPath($node->ownerDocument);
         $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
-        $texts = $xpath->query('.//w:t', $node);
+        $texts = $xpath->query('.//*[local-name()="t"]', $node);
         $fullText = '';
         foreach ($texts as $t) { $fullText .= $t->nodeValue; }
         
