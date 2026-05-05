@@ -65,15 +65,152 @@
   margin: 0 auto;
 }
 
-/* ── Main section: constrain upload card width ── */
-main {
+/* ── Main section: constrain max width for side by side ── */
+.main-container {
   width: 100%;
-  max-width: 540px;
+  max-width: 1100px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.main-content-layout {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 2.5rem;
+  width: 100%;
+  margin-bottom: 2rem;
+}
+
+@media (max-width: 950px) {
+  .main-content-layout {
+    flex-direction: column;
+    align-items: center;
+  }
 }
 
 /* ── Upload Card ── */
 .upload-card {
+  flex: 7;
+  width: 100%;
+  max-width: none;
+  margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Guideline Section ── */
+.guideline-section {
+  flex: 3;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  padding: 0.5rem 0;
+}
+
+.guideline-section h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-top: 0;
   margin-bottom: 1.25rem;
+  display: flex;
+  align-items: center;
+}
+
+.guideline-content {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  line-height: 1.7;
+}
+
+.guideline-item {
+  margin-bottom: 1.25rem;
+}
+
+.guideline-item-title {
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 0.5rem;
+  display: block;
+}
+
+.guideline-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: rgba(239, 68, 68, 0.15); /* Red/pink tint */
+  color: var(--color-error);
+  margin: 0 0.2rem;
+  vertical-align: middle;
+}
+
+.guideline-success {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--color-success);
+  font-weight: 600;
+}
+
+.guideline-tip {
+  background: rgba(245, 158, 11, 0.08); /* Amber tint */
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  color: var(--color-text);
+  margin-top: 1.5rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.guideline-tip strong {
+  color: var(--color-warning);
+  font-weight: 700;
+}
+
+/* ── Validation Error Banner ── */
+.validation-error-banner {
+  background: rgba(239, 68, 68, 0.08);
+  border-left: 4px solid var(--color-error);
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  border-radius: var(--radius-sm, 0.375rem);
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.validation-error-banner svg {
+  width: 1.5rem;
+  height: 1.5rem;
+  color: var(--color-error);
+  flex-shrink: 0;
+}
+
+.validation-error-content h3 {
+  color: var(--color-error);
+  font-weight: 600;
+  font-size: 1rem;
+  margin: 0 0 0.25rem 0;
+}
+
+.validation-error-content p {
+  color: var(--color-text);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.validation-error-content .validation-error-hint {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+  font-style: italic;
 }
 
 /* Nút Xem trước nội dung */

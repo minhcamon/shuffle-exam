@@ -5,10 +5,10 @@
 .drop-zone {
   border: 2px dashed var(--color-border);
   border-radius: var(--radius-lg);
-  padding: 3rem 2rem;
+  padding: 4.5rem 2rem;
   text-align: center;
   cursor: pointer;
-  transition: var(--transition);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   background: var(--color-surface-alt);
   position: relative;
   overflow: hidden;
@@ -18,7 +18,7 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.08), rgba(6, 182, 212, 0.08));
   opacity: 0;
   transition: opacity 0.3s ease;
 }
@@ -26,10 +26,21 @@
 .drop-zone:hover:not(.disabled),
 .drop-zone.dragging {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.15);
+  background: rgba(124, 58, 237, 0.03);
+  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.1);
+  transform: translateY(-2px);
 }
 
-.drop-zone.dragging::before { opacity: 0.05; }
+.drop-zone.dragging {
+  border-color: var(--color-accent);
+  background: rgba(6, 182, 212, 0.05);
+  box-shadow: 0 0 0 4px rgba(6, 182, 212, 0.15);
+}
+
+.drop-zone:hover:not(.disabled)::before,
+.drop-zone.dragging::before {
+  opacity: 1;
+}
 
 .drop-zone.disabled {
   opacity: 0.5;
@@ -37,9 +48,16 @@
 }
 
 .drop-zone__icon {
-  font-size: 3rem;
-  margin-bottom: 1rem;
+  font-size: 4.5rem;
+  margin-bottom: 1.25rem;
   display: block;
+  filter: drop-shadow(0 8px 16px rgba(0,0,0,0.15));
+  transition: transform 0.3s ease;
+}
+
+.drop-zone:hover:not(.disabled) .drop-zone__icon,
+.drop-zone.dragging .drop-zone__icon {
+  transform: scale(1.08) translateY(-4px);
 }
 
 /* With file selected */

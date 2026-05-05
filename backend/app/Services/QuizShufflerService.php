@@ -110,11 +110,14 @@ class QuizShufflerService
         $xpath = new DOMXPath($dom);
         $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
         
-        if ($xpath->query('.//*[local-name()="u" and not(@*[local-name()="val"]="none")]', $node)->length > 0) return true;
-        if ($xpath->query('.//*[local-name()="pBdr"]/*[local-name()="bottom" and not(@*[local-name()="val"]="none")] | .//*[local-name()="bdr" and not(@*[local-name()="val"]="none")]', $node)->length > 0) return true;
-        if ($xpath->query('.//*[local-name()="highlight" and not(@*[local-name()="val"]="none")]', $node)->length > 0) return true;
+        // 1. Quét Gạch chân (u): Chỉ quét trong <w:r>, bỏ qua <w:pPr>
+        if ($xpath->query('.//*[local-name()="r"]/*[local-name()="rPr"]/*[local-name()="u" and not(@*[local-name()="val"]="none")]', $node)->length > 0) return true;
+        
+        // 2. Quét Highlight (Tô màu nền): Chỉ quét trong <w:r>
+        if ($xpath->query('.//*[local-name()="r"]/*[local-name()="rPr"]/*[local-name()="highlight" and not(@*[local-name()="val"]="none")]', $node)->length > 0) return true;
 
-        $styles = $xpath->query('.//*[local-name()="rStyle"]', $node);
+        // 3. Quét Style gạch chân ẩn (Kế thừa): Chỉ quét trong <w:r>
+        $styles = $xpath->query('.//*[local-name()="r"]/*[local-name()="rPr"]/*[local-name()="rStyle"]', $node);
         foreach ($styles as $style) {
             $val = '';
             foreach ($style->attributes as $attr) {
@@ -127,6 +130,7 @@ class QuizShufflerService
                 return true;
             }
         }
+        
         return false;
     }
 
