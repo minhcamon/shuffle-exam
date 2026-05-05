@@ -43,6 +43,9 @@ class QuizShufflerService
             // Bước 1: Đọc và bóc tách
             [$dom, $body, $sections, $globalFooterNodes] = $this->parseDocumentSections($xmlOriginalPath);
 
+            // GỌI BỘ LỌC VALIDATION Ở ĐÂY
+            $this->validateParsedSections($sections);
+
             // Bước 2: Thay mã đề (Bản nâng cấp Nuclear Replace)
             $this->replaceCodeInDOM($dom, $maDe);
             $this->updateExamCodeInHeadersAndFooters($workspace, $maDe);
@@ -333,75 +336,7 @@ class QuizShufflerService
                     $nodesToRemove[] = $node;
                     continue;
                 }
-
-                // if ($node->nodeName === 'w:tbl') {
-                //     $tcs = $xpath->query('.//w:tc', $node);
-                //     $boxAnswers = [];
-                //     $layoutCells = [];
-
-                //     foreach ($tcs as $tc) {
-                //         $tcText = trim($tc->textContent);
-                //         $ps = $xpath->query('.//w:p', $tc);
-                //         $ansInCell = [];
-                //         foreach ($ps as $p) {
-                //             if (preg_match('/^\s*([A-Da-d])\s*([\.\\)])/u', $p->textContent, $m)) {
-                //                 $ansInCell[strtoupper($m[1])] = ['node' => $p, 'is_lower' => ctype_lower($m[1])];
-                //             }
-                //         }
-
-                //         if (count($ansInCell) >= 2) {
-                //             foreach ($ansInCell as $key => $ansData) { $boxAnswers[$key] = $ansData; }
-                //         } elseif (preg_match('/^([A-Da-d])\s*([\.\\)])/u', $tcText, $m)) {
-                //             $layoutCells[strtoupper($m[1])] = ['node' => $tc, 'is_lower' => ctype_lower($m[1])];
-                //         }
-                //     }
-
-                //     if (count($boxAnswers) >= 2) {
-                //         $sections[$currentSection]['questions'][$currentQuestion]['has_seen_answers'] = true;
-                //         foreach ($boxAnswers as $key => $ansData) {
-                //             $pNode = $ansData['node'];
-                //             $sections[$currentSection]['questions'][$currentQuestion]['answers'][$key] = $pNode;
-                //             $sections[$currentSection]['questions'][$currentQuestion]['is_lower_case'] = $ansData['is_lower'];
-
-                //             $isCorrect = $this->isNodeUnderlined($pNode, $dom);
-                //             if (str_contains($currentSection, 'Phần II')) {
-                //                 $sections[$currentSection]['questions'][$currentQuestion]['tf_answers'][$key] = $isCorrect ? 'Đ' : 'S';
-                //             } elseif ($isCorrect) {
-                //                 $sections[$currentSection]['questions'][$currentQuestion]['correct_key'] = $key;
-                //             }
-                //         }
-                //         $nodesToRemove[] = $node; 
-                //     } elseif (count($layoutCells) >= 2) {
-                //         $sections[$currentSection]['questions'][$currentQuestion]['has_seen_answers'] = true;
-                //         $answerCells = [];
-                //         foreach ($layoutCells as $key => $ansData) {
-                //             $tcNode = $ansData['node'];
-                //             $answerCells[$key] = $tcNode;
-                //             $sections[$currentSection]['questions'][$currentQuestion]['is_lower_case'] = $ansData['is_lower'];
-
-                //             $isCorrect = $this->isNodeUnderlined($tcNode, $dom);
-                //             if (str_contains($currentSection, 'Phần II')) {
-                //                 $sections[$currentSection]['questions'][$currentQuestion]['tf_answers'][$key] = $isCorrect ? 'Đ' : 'S';
-                //             } elseif ($isCorrect) {
-                //                 $sections[$currentSection]['questions'][$currentQuestion]['correct_key'] = $key;
-                //             }
-                //         }
-                //         $sections[$currentSection]['questions'][$currentQuestion]['table_answers'] = [
-                //             'table_node' => $node,
-                //             'cells'      => $answerCells,
-                //         ];
-                //         $nodesToRemove[] = $node;
-                //     } else {
-                //         // Bảng là text phụ trước hoặc sau
-                //         if (!$sections[$currentSection]['questions'][$currentQuestion]['has_seen_answers']) {
-                //             $sections[$currentSection]['questions'][$currentQuestion]['question_nodes'][] = $node;
-                //         } else {
-                //             $sections[$currentSection]['questions'][$currentQuestion]['post_question_nodes'][] = $node;
-                //         }
-                //         $nodesToRemove[] = $node;
-                //     }
-                //     continue;
-                // } 
+        
                 if ($node->localName === 'tbl') {
                     $tcs = $xpath->query('.//*[local-name()="tc"]', $node);
                     $boxAnswers = [];
@@ -519,31 +454,31 @@ class QuizShufflerService
                     }
                     continue;
                 }
-                elseif (preg_match('/^\s*([A-Da-d])\s*([\.\\)])/u', $text, $m)) {
+                elseif (preg_match('/^[\s\p{Zs}\x{200B}\x{FEFF}]*([A-Da-d])\s*([\.\\)])/u', $text, $m)) {
                     $ansKey = strtoupper($m[1]);
                     $sections[$currentSection]['questions'][$currentQuestion]['has_seen_answers'] = true;
                     
-                    if (preg_match('/(Đúng|Sai)/iu', $text, $tfMatch)) {
-                        $sections[$currentSection]['questions'][$currentQuestion]['tf_key_nodes'][$ansKey] = [
-                            'node' => $node, 'value' => $tfMatch[1]
-                        ];
-                    } else {
-                        $sections[$currentSection]['questions'][$currentQuestion]['answers'][$ansKey] = $node;
-                    }
+                    // LƯU ĐÁP ÁN TRỰC TIẾP (Không cần quan tâm nội dung có chữ Đúng/Sai hay không)
+                    $sections[$currentSection]['questions'][$currentQuestion]['answers'][$ansKey] = $node;
 
+                    // PHÂN LOẠI DỰA VÀO CHỮ HOA/CHỮ THƯỜNG (A,B,C,D -> MCQ | a,b,c,d -> TF)
                     $isLowerCase = ctype_lower($m[1]);
                     $sections[$currentSection]['questions'][$currentQuestion]['is_lower_case'] = $isLowerCase;
 
                     $isCorrect = $this->isNodeUnderlined($node, $dom);
+                    
                     if ($isLowerCase) {
+                        // Trắc nghiệm Đúng/Sai
                         $sections[$currentSection]['questions'][$currentQuestion]['tf_answers'][$ansKey] = $isCorrect ? 'Đ' : 'S';
                         $sections[$currentSection]['questions'][$currentQuestion]['question_type'] = 'TF';
                     } else {
+                        // Trắc nghiệm 4 đáp án chọn 1
                         if ($isCorrect) {
                             $sections[$currentSection]['questions'][$currentQuestion]['correct_key'] = $ansKey;
                         }
                         $sections[$currentSection]['questions'][$currentQuestion]['question_type'] = 'MCQ';
                     }
+                    
                     $nodesToRemove[] = $node;
                 } 
                 else {
@@ -938,5 +873,41 @@ class QuizShufflerService
             is_dir($path) ? $this->deleteDirectory($path) : unlink($path);
         }
         rmdir($dirPath);
+    }
+
+    /**
+     * Máy quét Validation: Kiểm tra lỗi định dạng trước khi trộn
+     */
+    private function validateParsedSections(array $sections): void
+    {
+        foreach ($sections as $secName => $sectionData) {
+            foreach ($sectionData['questions'] as $qName => $qData) {
+                $qType = $qData['question_type'];
+                
+                // Đếm tổng số đáp án thu thập được (từ text thường hoặc từ bảng)
+                $numAnswers = count($qData['answers'] ?? []) + count($qData['table_answers']['cells'] ?? []);
+
+                // Bỏ qua nếu là câu tự luận (không có đáp án nào)
+                if ($numAnswers === 0) continue;
+
+                if ($qType === 'MCQ') {
+                    // Lỗi 1: Không có đáp án đúng
+                    if (empty($qData['correct_key'])) {
+                        throw new \Exception("LỖI ĐỊNH DẠNG: Tại <b>[{$secName} - {$qName}]</b> chưa có đáp án nào được gạch chân để làm đáp án đúng.");
+                    }
+                    // Lỗi 2: Thiếu đáp án (không đủ A, B, C, D)
+                    if ($numAnswers < 4) {
+                        throw new \Exception("LỖI ĐỊNH DẠNG: Tại <b>[{$secName} - {$qName}]</b> đang bị thiếu đáp án (Chỉ tìm thấy {$numAnswers}/4 đáp án). Vui lòng kiểm tra lại.");
+                    }
+                }
+                
+                if ($qType === 'TF') {
+                    // Lỗi 3: Câu Đúng/Sai thiếu mệnh đề
+                    if ($numAnswers < 4) {
+                         throw new \Exception("LỖI ĐỊNH DẠNG: Tại <b>[{$secName} - {$qName}]</b> (dạng Đúng/Sai) đang không đủ 4 ý a, b, c, d.");
+                    }
+                }
+            }
+        }
     }
 }
