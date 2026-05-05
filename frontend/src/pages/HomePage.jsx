@@ -316,12 +316,12 @@ function HomePage() {
                     <span className="guideline-success">✔ Mệnh đề ĐÚNG:</span> Phải <u>gạch chân</u>.
                   </div>
 
-                  <div className="guideline-tip">
+                  {/* <div className="guideline-tip">
                     <span>💡</span>
                     <div>
                       <strong>Mẹo nhỏ:</strong> Nếu copy đề từ PDF/Web, hãy dán vào Word trắng, bôi đen toàn bộ và nhấn <b>Ctrl + U</b> 2 lần để xóa sạch lỗi gạch chân ẩn nhé!
                     </div>
-                  </div>
+                  </div> */}
                 </div>
               </aside>
             </div>
