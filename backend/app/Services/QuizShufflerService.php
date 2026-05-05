@@ -202,6 +202,8 @@ class QuizShufflerService
 
                             // Ghi cụm mới vào Node này
                             $t->nodeValue = $before . $replacement . $after;
+                            // BÙA BẢO VỆ DẤU CÁCH
+                            $t->setAttribute('xml:space', 'preserve'); 
                             $charsToMatch -= $localMatchLen;
                             $replaced = true;
                         }
@@ -897,6 +899,7 @@ class QuizShufflerService
                 $tLen = mb_strlen($tText, 'UTF-8');
                 if ($first) {
                     $t->nodeValue = $replacement . mb_substr($tText, $charsToRemove, null, 'UTF-8');
+                    $t->setAttribute('xml:space', 'preserve');
                     $charsToRemove -= $tLen;
                     $first = false;
                 } else {
@@ -905,6 +908,7 @@ class QuizShufflerService
                         $charsToRemove -= $tLen;
                     } else {
                         $t->nodeValue = mb_substr($tText, $charsToRemove, null, 'UTF-8');
+                        $t->setAttribute('xml:space', 'preserve');
                         $charsToRemove = 0;
                     }
                 }
