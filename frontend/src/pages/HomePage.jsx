@@ -22,10 +22,11 @@ function HomePage() {
 
   // Sync độ dài mảng codes theo copies (thêm ô trống / bớt ô thừa)
   useEffect(() => {
+    const validCopies = Number(copies) || 0
     setCodes((prev) => {
-      if (prev.length === copies) return prev
-      if (prev.length < copies) return [...prev, ...Array(copies - prev.length).fill('')]
-      return prev.slice(0, copies)
+      if (prev.length === validCopies) return prev
+      if (prev.length < validCopies) return [...prev, ...Array(validCopies - prev.length).fill('')]
+      return prev.slice(0, validCopies)
     })
     setCodesError(null)
   }, [copies])
@@ -168,11 +169,25 @@ function HomePage() {
                         min={2}
                         max={26}
                         value={copies}
-                        onChange={(e) => setCopies(Math.min(26, Math.max(2, Number(e.target.value))))}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === '') {
+                            setCopies('');
+                            return;
+                          }
+                          const num = parseInt(val, 10);
+                          if (isNaN(num)) return;
+                          if (num > 26) setCopies(26);
+                          else setCopies(num);
+                        }}
+                        onBlur={(e) => {
+                          const val = parseInt(e.target.value, 10);
+                          if (isNaN(val) || val < 2) setCopies(2);
+                        }}
                         disabled={isLoading}
                         className="copies-input"
                       />
-                      <span className="copies-hint">mã đề (tối đa 26 — A → Z)</span>
+                      <span className="copies-hint">mã đề (tối đa 26)</span>
                     </div>
                   </div>
 
