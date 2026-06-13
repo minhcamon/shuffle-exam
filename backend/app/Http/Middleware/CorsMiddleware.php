@@ -17,31 +17,24 @@ class CorsMiddleware
 {
     public function handle(Request $request, Closure $next): Response
     {
-        $allowedOrigins = array_filter([
-            env('FRONTEND_URL'),       // Production: https://your-app.vercel.app
-            'http://localhost:5173',   // Dev: Vite dev server
-            'http://localhost:4173',   // Dev: Vite preview
-        ]);
-
-        $origin = $request->headers->get('Origin');
+        $origin = $request->headers->get('Origin') ?: '*';
 
         // Preflight OPTIONS request
         if ($request->isMethod('OPTIONS')) {
             return response('', 204)
-                ->header('Access-Control-Allow-Origin', in_array($origin, $allowedOrigins) ? $origin : '')
-                ->header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-                ->header('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization, X-Requested-With')
+                ->header('Access-Control-Allow-Origin', $origin)
+                ->header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization, X-Requested-With, Origin')
+                ->header('Access-Control-Allow-Credentials', 'true')
                 ->header('Access-Control-Max-Age', '86400');
         }
 
         $response = $next($request);
 
-        if (in_array($origin, $allowedOrigins)) {
-            $response->headers->set('Access-Control-Allow-Origin', $origin);
-            $response->headers->set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-            $response->headers->set('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization');
-            $response->headers->set('Vary', 'Origin');
-        }
+        $response->headers->set('Access-Control-Allow-Origin', $origin);
+        $response->headers->set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
+        $response->headers->set('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization, X-Requested-With, Origin');
+        $response->headers->set('Access-Control-Allow-Credentials', 'true');
 
         return $response;
     }
