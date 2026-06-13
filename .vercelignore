@@ -1,0 +1,8 @@
+node_modules
+frontend/node_modules
+backend/vendor
+backend/storage/framework/cache/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
+backend/storage/logs/*
+backend/storage/app/temp_uploads/*

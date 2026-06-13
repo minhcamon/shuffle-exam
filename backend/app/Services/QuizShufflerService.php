@@ -756,7 +756,7 @@ class QuizShufflerService
 
     private function prepareWorkspace(string $filePath): array {
         $workspace = storage_path('app/temp_workspace_' . uniqid());
-        mkdir($workspace);
+        mkdir($workspace, 0755, true);
         $zip = new ZipArchive();
         
         if ($zip->open($filePath) === true) {

@@ -1,0 +1,8 @@
+{
+  "name": "shuffle-exam-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "cd backend && composer install --no-dev --optimize-autoloader && cd ../frontend && npm install && npm run build"
+  }
+}

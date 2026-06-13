@@ -95,6 +95,9 @@ class QuizController extends Controller
 
             // 2. LƯU FILE BẰNG HÀM MOVE() GỐC (Bỏ qua Storage ảo của Laravel)
             $destinationPath = storage_path('app/temp_uploads'); // Đường dẫn thư mục vật lý
+            if (!is_dir($destinationPath)) {
+                mkdir($destinationPath, 0755, true);
+            }
             $tempFileName = 'upload_' . time() . '_' . uniqid() . '.docx';
 
             // Lệnh này di chuyển thẳng file vào thư mục đích
