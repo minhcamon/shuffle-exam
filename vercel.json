@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "outputDirectory": "frontend/dist",
   "functions": {
     "api/index.php": {
       "runtime": "vercel-php@0.8.0"
@@ -22,16 +23,8 @@
       "destination": "/api/index.php"
     },
     {
-      "source": "/assets/(.*)",
-      "destination": "/frontend/dist/assets/$1"
-    },
-    {
-      "source": "/((?!api/).*\\.[a-zA-Z0-9]+)",
-      "destination": "/frontend/dist/$1"
-    },
-    {
       "source": "/((?!api/).*)",
-      "destination": "/frontend/dist/index.html"
+      "destination": "/index.html"
     }
   ]
 }
