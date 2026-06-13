@@ -16,10 +16,22 @@
       ]
     }
   ],
-  "routes": [
+  "rewrites": [
     {
-      "src": "/api/(.*)",
-      "dest": "api/index.php"
+      "source": "/api/(.*)",
+      "destination": "/api/index.php"
+    },
+    {
+      "source": "/assets/(.*)",
+      "destination": "/frontend/dist/assets/$1"
+    },
+    {
+      "source": "/((?!api/).*\\.[a-zA-Z0-9]+)",
+      "destination": "/frontend/dist/$1"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/frontend/dist/index.html"
     }
   ]
 }
